@@ -38,6 +38,9 @@ tmp/
 *.tmp
 *.temp
 
+# Personal learning notes (not part of project)
+notes/
+
 # Browser automation temp files
 .playwright-mcp/
 
