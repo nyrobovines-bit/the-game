@@ -34,6 +34,14 @@ desktop.ini
 .cursor/
 *.code-workspace
 
+# Temporary files and one-off scripts
+tmp/
+*.tmp
+*.temp
+
+# Browser automation temp files
+.playwright-mcp/
+
 # Other files not needed for the game
 CoolPotentialError.html
 wowitworks.html
