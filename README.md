@@ -204,6 +204,60 @@ The fork is configured to sync from upstream, so use `gh repo sync` instead of d
 
 This is a personal project.
 
+## 📚 Code Documentation
+
+### World & Camera System
+
+- **World Size**: 2400x2064 pixels (larger than canvas to enable camera movement)
+- **Camera**: Smooth follow using linear interpolation (lerp = 0.12). Smaller values = slower follow, larger = snappier
+- **Coordinate System**: World coordinates (where objects exist) vs Screen coordinates (where to draw). Always translate: `screenX = worldX - camera.x`
+
+### Sprite Loading
+
+All sprites use `imageSmoothingEnabled = false` for pixelated rendering. Sprites are loaded as `Image()` objects and must be checked for `complete` before rendering.
+
+### Pot Sprites
+
+- Regular pot: `Sprites for the Game-3 (1).png`
+- Tall pot: `Sprites for the Game-5 (1).png` (more susceptible to gravity and balancing input)
+- Short pot: `Sprites for the Game-4 (2).png` (less susceptible to gravity and balancing input)
+
+### Minigame States
+
+**Balancing Minigame:**
+- `potAngle`: Current rotation in radians (0 = balanced)
+- `potAngularVelocity`: Rotation speed
+- `timeRemaining`: Seconds left (15 seconds)
+- `potType`: 'regular', 'tall', or 'short' (affects gravity/input multipliers)
+
+**Brushing Minigame:**
+- `dirtLevel`: 0 = clean, 1.0 = fully dirty
+- `redness`: 0 = normal, 1.0 = fully red (gradual transition)
+- `redTriggerTime`: Random 3-8 seconds when dirt turns red
+- `perfectReleaseWindow`: 0.5 seconds after fully red for perfect timing
+
+**Declaration Minigame:**
+- `realExcerpt`: The authentic text (left side)
+- `testExcerpt`: The potentially fake text with typos (right side)
+- `isFake`: Whether test excerpt contains typos
+- `baseReward`: +$50 for correct answer
+- `penalty`: -$30 for wrong answer (calling fake real)
+
+### Game Loop Pattern
+
+1. Update game state (physics, AI, input)
+2. Clear canvas
+3. Render world (sprites, backgrounds)
+4. Render UI (menus, HUD)
+5. Request next frame with `requestAnimationFrame`
+
+### Rendering Best Practices
+
+- Always use `ctx.save()` and `ctx.restore()` for transformations
+- Round positions with `Math.round()` for pixel-perfect rendering
+- Check sprite `complete` property before drawing
+- Use `image-rendering: pixelated` in CSS for canvas
+
 ## Credits
 
 Built with vanilla JavaScript, HTML5 Canvas, and pixel art sprites.
