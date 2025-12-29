@@ -1,113 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dig, Dig, Dig!</title>
     <style>
       html,
       body {
-      height: 100%;
-            margin: 0;
-      background: #0f1a12;
-      color: #e8eaf6;
+        height: 100%;
+        margin: 0;
+        background: #0f1a12;
+        color: #e8eaf6;
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu,
           Cantarell, Noto Sans, Helvetica, Arial, 'Apple Color Emoji',
           'Segoe UI Emoji';
-    }
-    .wrap {
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      min-height: 100%;
-    }
+      }
+      .wrap {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 100%;
+      }
       header,
       footer {
-      padding: 6px 14px;
-      background: #15193a;
-      border-bottom: 1px solid #2b2f55;
-    }
-    header {
-      position: sticky;
-            top: 0;
-      z-index: 1;
-    }
-    footer {
-      border-top: 1px solid #2b2f55;
-      border-bottom: none;
-    }
-    main {
-      display: grid;
-      place-items: center;
-      padding: 0;
-      overflow: hidden;
-    }
-    canvas {
-      background: #1c7f2d;
-      border: 1px solid #2b2f55;
+        padding: 6px 14px;
+        background: #15193a;
+        border-bottom: 1px solid #2b2f55;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+      }
+      footer {
+        border-top: 1px solid #2b2f55;
+        border-bottom: none;
+      }
+      main {
+        display: grid;
+        place-items: center;
+        padding: 0;
+        overflow: hidden;
+      }
+      canvas {
+        background: #1c7f2d;
+        border: 1px solid #2b2f55;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35),
           inset 0 0 0 1px rgba(255, 255, 255, 0.03);
-      image-rendering: pixelated;
-      max-width: 100%;
-      height: 100%;
-      width: auto;
-    }
-    .hint {
-      opacity: 0.8;
-      font-size: 11px;
-    }
-    kbd {
-      background: #202659;
-      border: 1px solid #303776;
-      border-bottom-width: 2px;
-      border-radius: 4px;
-      padding: 1px 6px;
+        image-rendering: pixelated;
+        max-width: 100%;
+        height: 100%;
+        width: auto;
+      }
+      .hint {
+        opacity: 0.8;
+        font-size: 11px;
+      }
+      kbd {
+        background: #202659;
+        border: 1px solid #303776;
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 1px 6px;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas,
           'Liberation Mono', monospace;
-      font-size: 12px;
-        }
+        font-size: 12px;
+      }
     </style>
-</head>
-<body>
-  <div class="wrap">
-    <header>
-      <strong>Simple Player Movement</strong>
-    </header>
-    <main>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <strong>Dig, Dig, Dig!</strong>
+      </header>
+      <main>
         <canvas
           id="game"
           width="800"
           height="500"
           aria-label="Game canvas"
         ></canvas>
-    </main>
+      </main>
     </div>
 
     <script>
       (function () {
-      const canvas = document.getElementById('game');
-      const ctx = canvas.getContext('2d');
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
 
-      const world = {
-        width: 2400,
+        const world = {
+          width: 2400,
           height: 2064,
           bg: '#0f1226',
-      };
+        };
 
-      const camera = {
-        x: world.width / 2,
-        y: world.height / 2,
+        const camera = {
+          x: world.width / 2,
+          y: world.height / 2,
           followLerp: 0.12,
-      };
+        };
 
-      const tileSize = 32;
-      const tileCols = Math.ceil(world.width / tileSize);
-      const tileRows = Math.ceil(world.height / tileSize);
-      const tileCell = 4;
-      const cellsPerTile = tileSize / tileCell;
+        const tileSize = 32;
+        const tileCols = Math.ceil(world.width / tileSize);
+        const tileRows = Math.ceil(world.height / tileSize);
+        const tileCell = 4;
+        const cellsPerTile = tileSize / tileCell;
 
-      function randomRange(min, max) {
-        return Math.random() * (max - min) + min;
-      }
+        function randomRange(min, max) {
+          return Math.random() * (max - min) + min;
+        }
 
         function createScatter(
           count,
@@ -116,108 +116,108 @@
           margin = 60,
           minDistance = 120
         ) {
-        const sprites = [];
+          const sprites = [];
           const maxAttempts = 50;
           const cellSize = minDistance * 2;
-        const gridCols = Math.ceil(world.width / cellSize);
-        const gridRows = Math.ceil(world.height / cellSize);
+          const gridCols = Math.ceil(world.width / cellSize);
+          const gridRows = Math.ceil(world.height / cellSize);
           const grid = Array.from({ length: gridRows }, () =>
             Array(gridCols)
               .fill(null)
               .map(() => [])
           );
 
-        function getGridCell(x, y) {
-          const col = Math.floor(x / cellSize);
-          const row = Math.floor(y / cellSize);
+          function getGridCell(x, y) {
+            const col = Math.floor(x / cellSize);
+            const row = Math.floor(y / cellSize);
             return {
               row: Math.max(0, Math.min(gridRows - 1, row)),
               col: Math.max(0, Math.min(gridCols - 1, col)),
             };
-        }
+          }
 
-        for (let i = 0; i < count; i++) {
-          const size = randomRange(minSize, maxSize);
-          const colliderRadius = size * 0.42;
-          const requiredDistance = minDistance + colliderRadius;
-          const requiredDistanceSq = requiredDistance * requiredDistance;
+          for (let i = 0; i < count; i++) {
+            const size = randomRange(minSize, maxSize);
+            const colliderRadius = size * 0.42;
+            const requiredDistance = minDistance + colliderRadius;
+            const requiredDistanceSq = requiredDistance * requiredDistance;
 
             let x,
               y,
               valid = false;
-          let placementAttempts = 0;
+            let placementAttempts = 0;
 
-          while (!valid && placementAttempts < maxAttempts) {
-            placementAttempts++;
-            x = randomRange(margin, world.width - margin);
-            y = randomRange(margin, world.height - margin);
+            while (!valid && placementAttempts < maxAttempts) {
+              placementAttempts++;
+              x = randomRange(margin, world.width - margin);
+              y = randomRange(margin, world.height - margin);
 
-            const cell = getGridCell(x, y);
-            valid = true;
-            for (let dr = -1; dr <= 1 && valid; dr++) {
-              for (let dc = -1; dc <= 1 && valid; dc++) {
-                const checkRow = cell.row + dr;
-                const checkCol = cell.col + dc;
+              const cell = getGridCell(x, y);
+              valid = true;
+              for (let dr = -1; dr <= 1 && valid; dr++) {
+                for (let dc = -1; dc <= 1 && valid; dc++) {
+                  const checkRow = cell.row + dr;
+                  const checkCol = cell.col + dc;
                   if (
                     checkRow >= 0 &&
                     checkRow < gridRows &&
                     checkCol >= 0 &&
                     checkCol < gridCols
                   ) {
-                  for (const existing of grid[checkRow][checkCol]) {
-                    const dx = x - existing.x;
-                    const dy = y - existing.y;
-                    const distSq = dx * dx + dy * dy;
-                    if (distSq < requiredDistanceSq) {
-                      valid = false;
-                      break;
+                    for (const existing of grid[checkRow][checkCol]) {
+                      const dx = x - existing.x;
+                      const dy = y - existing.y;
+                      const distSq = dx * dx + dy * dy;
+                      if (distSq < requiredDistanceSq) {
+                        valid = false;
+                        break;
+                      }
                     }
                   }
                 }
               }
             }
-          }
 
-          if (valid) {
-            const tree = {
-              x,
-              y,
-              size,
-              rotation: randomRange(-Math.PI / 8, Math.PI / 8),
+            if (valid) {
+              const tree = {
+                x,
+                y,
+                size,
+                rotation: randomRange(-Math.PI / 8, Math.PI / 8),
                 colliderRadius,
-            };
-            sprites.push(tree);
-            const cell = getGridCell(x, y);
-            grid[cell.row][cell.col].push(tree);
+              };
+              sprites.push(tree);
+              const cell = getGridCell(x, y);
+              grid[cell.row][cell.col].push(tree);
+            }
           }
+          return sprites;
         }
-        return sprites;
-      }
 
-      const flora = {
+        const flora = {
           trees: createScatter(65, 78, 102, 140, 180),
-      };
+        };
 
-      const balancingMinigame = {
-        active: false,
+        const balancingMinigame = {
+          active: false,
           potAngle: 0,
           potAngularVelocity: 0,
           timeRemaining: 15,
           baseReward: 10,
           stickX: 0,
           stickY: 0,
-        potSprite: null,
+          potSprite: null,
           potType: 'regular',
-        tileRow: null,
-        tileCol: null,
+          tileRow: null,
+          tileCol: null,
           breaking: false,
           breakTimer: 0,
           pieces: [],
           isSecretX: false, // Track if this minigame came from a secret X tile
         };
 
-      const brushingMinigame = {
-        active: false,
+        const brushingMinigame = {
+          active: false,
           dirtLevel: 1.0,
           redness: 0,
           timeHoldingSpace: 0,
@@ -226,8 +226,8 @@
           redTransitionTime: 1.0,
           perfectReleaseWindow: 0.5,
           baseReward: 10,
-        tileRow: null,
-        tileCol: null,
+          tileRow: null,
+          tileCol: null,
           brushX: 0,
           brushY: 0,
           brushOffset: 0,
@@ -254,81 +254,126 @@
           isSecretX: false, // Track if this minigame came from a secret X tile
         };
 
-      const potSprite = new Image();
-      potSprite.src = 'assets/sprites/pot.png';
+        // Optimize sprite loading: set imageSmoothingEnabled before src for faster rendering
+        const potSprite = new Image();
         potSprite.imageSmoothingEnabled = false;
+        potSprite.src = 'assets/sprites/pot.png';
 
         const potTallTanSprite = new Image();
-        potTallTanSprite.src = 'assets/sprites/tall-pot.png';
         potTallTanSprite.imageSmoothingEnabled = false;
+        potTallTanSprite.src = 'assets/sprites/tall-pot.png';
 
         const potShortGreySprite = new Image();
-        potShortGreySprite.src = 'assets/sprites/short-pot.png';
         potShortGreySprite.imageSmoothingEnabled = false;
+        potShortGreySprite.src = 'assets/sprites/short-pot.png';
 
         const potPoleSprite = new Image();
-        potPoleSprite.src = 'assets/sprites/pot-pole.png';
         potPoleSprite.imageSmoothingEnabled = false;
+        potPoleSprite.src = 'assets/sprites/pot-pole.png';
 
-      const brushSprite = new Image();
-      brushSprite.src = 'assets/sprites/brush.png';
+        const brushSprite = new Image();
         brushSprite.imageSmoothingEnabled = false;
+        brushSprite.src = 'assets/sprites/brush.png';
 
-      const dirtSprite = new Image();
-      dirtSprite.src = 'assets/sprites/dirt.png';
+        const dirtSprite = new Image();
         dirtSprite.imageSmoothingEnabled = false;
+        dirtSprite.src = 'assets/sprites/dirt.png';
 
-      const moneyBorderSprite = new Image();
-      moneyBorderSprite.src = 'assets/sprites/money_border.png';
+        const moneyBorderSprite = new Image();
         moneyBorderSprite.imageSmoothingEnabled = false;
+        moneyBorderSprite.src = 'assets/sprites/money_border.png';
 
         const grassSprite = new Image();
-        grassSprite.src = 'assets/sprites/Grass.png';
         grassSprite.imageSmoothingEnabled = false;
+        grassSprite.src = 'assets/sprites/Grass.png';
 
-      const oldGuySprite = new Image();
-      oldGuySprite.src = 'assets/sprites/oldguy.png';
+        const flowerSprite = new Image();
+        flowerSprite.imageSmoothingEnabled = false;
+        flowerSprite.src = 'assets/sprites/Flowers.png';
+
+        // Function to regenerate all tiles (called when grass sprite loads)
+        function regenerateTiles() {
+          for (let row = 0; row < tileRows; row++) {
+            for (let col = 0; col < tileCols; col++) {
+              const tile = tileMap[row][col];
+              if (tile) {
+                // Find the original tile definition
+                const def = tileDefinitions.find((d) => d.name === tile.name);
+                if (def) {
+                  // Regenerate the canvas with the now-loaded grass sprite
+                  tileMap[row][col] = {
+                    name: def.name,
+                    canvas: createTileCanvas(def.draw),
+                  };
+                }
+              }
+            }
+          }
+        }
+
+        // Regenerate tiles when grass sprite loads
+        // This ensures the grass sprite is drawn even if it loads after initial tile creation
+        grassSprite.onload = function () {
+          regenerateTiles();
+        };
+
+        // Regenerate tiles when flower sprite loads
+        // This ensures the flower sprite is drawn even if it loads after initial tile creation
+        flowerSprite.onload = function () {
+          regenerateTiles();
+        };
+
+        // If sprite is already loaded (cached), regenerate tiles immediately
+        if (grassSprite.complete && grassSprite.naturalWidth > 0) {
+          // Sprite already loaded, but tiles haven't been created yet
+          // We'll regenerate after tiles are created (see below)
+        }
+
+        // Optimize sprite loading: set imageSmoothingEnabled before src
+        const oldGuySprite = new Image();
         oldGuySprite.imageSmoothingEnabled = false;
-      const shopkeeperSprite = new Image();
-      shopkeeperSprite.src = 'assets/sprites/shopkeeper.png';
-      shopkeeperSprite.imageSmoothingEnabled = false; // Pixelated rendering
+        oldGuySprite.src = 'assets/sprites/oldguy.png';
+        
+        const shopkeeperSprite = new Image();
+        shopkeeperSprite.imageSmoothingEnabled = false; // Pixelated rendering
+        shopkeeperSprite.src = 'assets/sprites/shopkeeper.png';
 
-      // Load player sprites from PNG images
-      const playerSpriteIdle = new Image();
-      playerSpriteIdle.src = 'assets/sprites/player.png';
-      playerSpriteIdle.imageSmoothingEnabled = false; // Pixelated rendering
+        // Load player sprites from PNG images
+        const playerSpriteIdle = new Image();
+        playerSpriteIdle.imageSmoothingEnabled = false; // Pixelated rendering
+        playerSpriteIdle.src = 'assets/sprites/player.png';
 
-      const playerSpriteBack = new Image();
-      playerSpriteBack.src = 'assets/sprites/player_back.png';
-      playerSpriteBack.imageSmoothingEnabled = false; // Pixelated rendering
+        const playerSpriteBack = new Image();
+        playerSpriteBack.imageSmoothingEnabled = false; // Pixelated rendering
+        playerSpriteBack.src = 'assets/sprites/player_back.png';
 
-      const playerSpriteBackWalk1 = new Image();
-      playerSpriteBackWalk1.src = 'assets/sprites/player_back_walk1.png';
-      playerSpriteBackWalk1.imageSmoothingEnabled = false; // Pixelated rendering
+        const playerSpriteBackWalk1 = new Image();
+        playerSpriteBackWalk1.imageSmoothingEnabled = false; // Pixelated rendering
+        playerSpriteBackWalk1.src = 'assets/sprites/player_back_walk1.png';
 
-      const playerSpriteBackWalk2 = new Image();
-      playerSpriteBackWalk2.src = 'assets/sprites/player_back_walk2.png';
-      playerSpriteBackWalk2.imageSmoothingEnabled = false; // Pixelated rendering
+        const playerSpriteBackWalk2 = new Image();
+        playerSpriteBackWalk2.imageSmoothingEnabled = false; // Pixelated rendering
+        playerSpriteBackWalk2.src = 'assets/sprites/player_back_walk2.png';
 
-      const playerSpriteWalk1 = new Image();
-      playerSpriteWalk1.src = 'assets/sprites/player_walk1.png';
-      playerSpriteWalk1.imageSmoothingEnabled = false; // Pixelated rendering
+        const playerSpriteWalk1 = new Image();
+        playerSpriteWalk1.imageSmoothingEnabled = false; // Pixelated rendering
+        playerSpriteWalk1.src = 'assets/sprites/player_walk1.png';
 
-      const playerSpriteWalk2 = new Image();
-      playerSpriteWalk2.src = 'assets/sprites/player_walk2.png';
-      playerSpriteWalk2.imageSmoothingEnabled = false; // Pixelated rendering
+        const playerSpriteWalk2 = new Image();
+        playerSpriteWalk2.imageSmoothingEnabled = false; // Pixelated rendering
+        playerSpriteWalk2.src = 'assets/sprites/player_walk2.png';
 
         const playerSpriteCrouch1 = new Image();
-        playerSpriteCrouch1.src = 'assets/sprites/crouch-one.png';
         playerSpriteCrouch1.imageSmoothingEnabled = false; // Pixelated rendering
+        playerSpriteCrouch1.src = 'assets/sprites/crouch-one.png';
 
         const playerSpriteCrouch2 = new Image();
         playerSpriteCrouch2.src = 'assets/sprites/crouch-two.png';
         playerSpriteCrouch2.imageSmoothingEnabled = false; // Pixelated rendering
 
-      // Walking animation state
-      let walkAnimationFrame = 0;
-      const walkAnimationSpeed = 0.15; // How fast the animation cycles (lower = faster)
+        // Walking animation state
+        let walkAnimationFrame = 0;
+        const walkAnimationSpeed = 0.15; // How fast the animation cycles (lower = faster)
 
         // Crouch animation state (plays before starting minigame)
         const crouchAnimation = {
@@ -339,107 +384,111 @@
           particles: [], // Particle effects during animation
         };
 
-      function createTileCanvas(drawFn) {
-        const buffer = document.createElement('canvas');
-        buffer.width = tileSize;
-        buffer.height = tileSize;
-        const bctx = buffer.getContext('2d');
+        function createTileCanvas(drawFn) {
+          const buffer = document.createElement('canvas');
+          buffer.width = tileSize;
+          buffer.height = tileSize;
+          const bctx = buffer.getContext('2d');
           // Disable image smoothing for pixel art
           bctx.imageSmoothingEnabled = false;
-        drawFn(bctx);
-        return buffer;
-      }
+          drawFn(bctx);
+          return buffer;
+        }
 
-      const colors = {
-        grassBase: '#28a933',
-        grassBright: '#36c843',
-        grassDark: '#1e902a',
-        outline: '#0c0c0c',
-        rockLight: '#c2c2c2',
-        rockMid: '#959595',
-        rockDark: '#5f5f5f',
-        rockShadow: '#3f3f3f',
-        moundOuter: '#0c3f16',
-        moundInner: '#0f5c1f',
-        moundHighlight: '#157f2d',
-        logLight: '#147429',
-        logDark: '#0e5a20',
-        logShadow: '#094217',
-        redDark: '#780808',
-        redBase: '#c40f0f',
+        const colors = {
+          grassBase: '#28a933',
+          grassBright: '#36c843',
+          grassDark: '#1e902a',
+          outline: '#0c0c0c',
+          rockLight: '#c2c2c2',
+          rockMid: '#959595',
+          rockDark: '#5f5f5f',
+          rockShadow: '#3f3f3f',
+          moundOuter: '#0c3f16',
+          moundInner: '#0f5c1f',
+          moundHighlight: '#157f2d',
+          logLight: '#147429',
+          logDark: '#0e5a20',
+          logShadow: '#094217',
+          redDark: '#780808',
+          redBase: '#c40f0f',
           redBright: '#ff2a2a',
-      };
+        };
 
-      function fillCell(ctx, cx, cy, color) {
-        ctx.fillStyle = color;
-        ctx.fillRect(cx * tileCell, cy * tileCell, tileCell, tileCell);
-      }
+        function fillCell(ctx, cx, cy, color) {
+          ctx.fillStyle = color;
+          ctx.fillRect(cx * tileCell, cy * tileCell, tileCell, tileCell);
+        }
 
-      function drawPlus(ctx, cx, cy, color) {
-        fillCell(ctx, cx, cy, color);
-        fillCell(ctx, cx - 1, cy, color);
-        fillCell(ctx, cx + 1, cy, color);
-        fillCell(ctx, cx, cy - 1, color);
-        fillCell(ctx, cx, cy + 1, color);
-      }
+        function drawPlus(ctx, cx, cy, color) {
+          fillCell(ctx, cx, cy, color);
+          fillCell(ctx, cx - 1, cy, color);
+          fillCell(ctx, cx + 1, cy, color);
+          fillCell(ctx, cx, cy - 1, color);
+          fillCell(ctx, cx, cy + 1, color);
+        }
 
-      function paintGrassBase(ctx, plusLayout) {
-        ctx.fillStyle = colors.grassBase;
-        ctx.fillRect(0, 0, tileSize, tileSize);
-        const layout = plusLayout || [
-          { x: 2, y: 2, color: colors.grassBright },
-          { x: 5, y: 4, color: colors.grassBright },
-          { x: 1, y: 5, color: colors.grassDark },
+        function paintGrassBase(ctx, plusLayout) {
+          ctx.fillStyle = colors.grassBase;
+          ctx.fillRect(0, 0, tileSize, tileSize);
+          const layout = plusLayout || [
+            { x: 2, y: 2, color: colors.grassBright },
+            { x: 5, y: 4, color: colors.grassBright },
+            { x: 1, y: 5, color: colors.grassDark },
             { x: 6, y: 1, color: colors.grassDark },
-        ];
-        layout.forEach((plus) => drawPlus(ctx, plus.x, plus.y, plus.color));
-      }
+          ];
+          layout.forEach((plus) => drawPlus(ctx, plus.x, plus.y, plus.color));
+        }
 
-      const tileDefinitions = [
-        {
-          name: 'grass',
-          weight: 110,
-          draw(ctx) {
-              // Always use grass sprite
+        const tileDefinitions = [
+          {
+            name: 'grass',
+            weight: 110,
+            draw(ctx) {
+              // Always use grass sprite (only draw if loaded)
               ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              if (grassSprite.complete && grassSprite.naturalWidth > 0) {
+                ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              }
             },
-        },
-        {
-          name: 'singleRock',
-          weight: 10,
-          draw(ctx) {
-              // Always use grass sprite
+          },
+          {
+            name: 'singleRock',
+            weight: 10,
+            draw(ctx) {
+              // Always use grass sprite (only draw if loaded)
               ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
-            const x = tileCell * 1;
-            const y = tileCell * 1;
-            const width = tileCell * 6;
-            const height = tileCell * 6;
-            ctx.fillStyle = colors.outline;
-            ctx.fillRect(x, y, width, height);
-            ctx.fillStyle = colors.rockDark;
+              if (grassSprite.complete && grassSprite.naturalWidth > 0) {
+                ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              }
+              const x = tileCell * 1;
+              const y = tileCell * 1;
+              const width = tileCell * 6;
+              const height = tileCell * 6;
+              ctx.fillStyle = colors.outline;
+              ctx.fillRect(x, y, width, height);
+              ctx.fillStyle = colors.rockDark;
               ctx.fillRect(
                 x + tileCell,
                 y + tileCell,
                 width - tileCell * 2,
                 height - tileCell * 2
               );
-            ctx.fillStyle = colors.rockMid;
+              ctx.fillStyle = colors.rockMid;
               ctx.fillRect(
                 x + tileCell * 2,
                 y + tileCell * 2,
                 width - tileCell * 4,
                 height - tileCell * 3
               );
-            ctx.fillStyle = colors.rockLight;
+              ctx.fillStyle = colors.rockLight;
               ctx.fillRect(
                 x + tileCell * 2,
                 y + tileCell * 2,
                 width - tileCell * 5,
                 height - tileCell * 5
               );
-            ctx.fillStyle = colors.rockShadow;
+              ctx.fillStyle = colors.rockShadow;
               ctx.fillRect(
                 x + tileCell * 2,
                 y + tileCell * 4,
@@ -447,36 +496,38 @@
                 tileCell * 2
               );
             },
-        },
-        {
-          name: 'rockCluster',
-          weight: 8,
-          draw(ctx) {
-              // Always use grass sprite
+          },
+          {
+            name: 'rockCluster',
+            weight: 8,
+            draw(ctx) {
+              // Always use grass sprite (only draw if loaded)
               ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
-            const cluster = [
-              { x: 1, y: 2, w: 3, h: 3, light: colors.rockMid },
-              { x: 4, y: 1, w: 3, h: 3, light: colors.rockLight },
-              { x: 3, y: 4, w: 4, h: 3, light: colors.rockDark },
+              if (grassSprite.complete && grassSprite.naturalWidth > 0) {
+                ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              }
+              const cluster = [
+                { x: 1, y: 2, w: 3, h: 3, light: colors.rockMid },
+                { x: 4, y: 1, w: 3, h: 3, light: colors.rockLight },
+                { x: 3, y: 4, w: 4, h: 3, light: colors.rockDark },
                 { x: 0, y: 4, w: 3, h: 3, light: colors.rockMid },
-            ];
-            cluster.forEach((rock) => {
-              ctx.fillStyle = colors.outline;
+              ];
+              cluster.forEach((rock) => {
+                ctx.fillStyle = colors.outline;
                 ctx.fillRect(
                   rock.x * tileCell,
                   rock.y * tileCell,
                   rock.w * tileCell,
                   rock.h * tileCell
                 );
-              ctx.fillStyle = rock.light;
+                ctx.fillStyle = rock.light;
                 ctx.fillRect(
                   (rock.x + 0.5) * tileCell,
                   (rock.y + 0.5) * tileCell,
                   (rock.w - 1) * tileCell,
                   (rock.h - 1) * tileCell
                 );
-              ctx.fillStyle = colors.rockShadow;
+                ctx.fillStyle = colors.rockShadow;
                 ctx.fillRect(
                   (rock.x + 0.5) * tileCell,
                   (rock.y + rock.h - 1) * tileCell,
@@ -485,66 +536,47 @@
                 );
               });
             },
-        },
-        {
-          name: 'moundedBush',
-          weight: 7,
-          draw(ctx) {
-              // Always use grass sprite
+          },
+          {
+            name: 'moundedBush',
+            weight: 7,
+            draw(ctx) {
+              // Always use grass sprite (only draw if loaded)
               ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
-            const x = tileCell;
-            const y = tileCell * 2;
-            const w = tileCell * 6;
-            const h = tileCell * 4;
-            ctx.fillStyle = colors.outline;
-            ctx.fillRect(x, y, w, h);
-            ctx.fillStyle = colors.moundOuter;
-              ctx.fillRect(
-                x + tileCell,
-                y + tileCell,
-                w - tileCell * 2,
-                h - tileCell * 2
-              );
-            ctx.fillStyle = colors.moundInner;
-              ctx.fillRect(
-                x + tileCell * 1.5,
-                y + tileCell * 1.5,
-                w - tileCell * 3,
-                h - tileCell * 3
-              );
-            ctx.fillStyle = colors.moundHighlight;
-              ctx.fillRect(
-                x + tileCell * 2,
-                y + tileCell * 1.5,
-                w - tileCell * 4,
-                tileCell * 2
-              );
+              if (grassSprite.complete && grassSprite.naturalWidth > 0) {
+                ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              }
+              // Draw flower sprite on top of grass
+              if (flowerSprite.complete && flowerSprite.naturalWidth > 0) {
+                ctx.drawImage(flowerSprite, 0, 0, tileSize, tileSize);
+              }
             },
-        },
-        {
-          name: 'logRows',
-          weight: 5,
-          draw(ctx) {
-              // Always use grass sprite
+          },
+          {
+            name: 'logRows',
+            weight: 5,
+            draw(ctx) {
+              // Always use grass sprite (only draw if loaded)
               ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
-            const startX = tileCell;
-            const width = tileCell * 6;
-            const logHeight = tileCell * 2;
-            const spacing = tileCell * 2;
-            for (let i = 0; i < 2; i++) {
-              const y = tileCell + i * (logHeight + spacing);
-              ctx.fillStyle = colors.outline;
-              ctx.fillRect(startX, y, width, logHeight);
-              ctx.fillStyle = colors.logDark;
+              if (grassSprite.complete && grassSprite.naturalWidth > 0) {
+                ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              }
+              const startX = tileCell;
+              const width = tileCell * 6;
+              const logHeight = tileCell * 2;
+              const spacing = tileCell * 2;
+              for (let i = 0; i < 2; i++) {
+                const y = tileCell + i * (logHeight + spacing);
+                ctx.fillStyle = colors.outline;
+                ctx.fillRect(startX, y, width, logHeight);
+                ctx.fillStyle = colors.logDark;
                 ctx.fillRect(
                   startX + tileCell,
                   y + tileCell / 2,
                   width - tileCell * 2,
                   logHeight - tileCell
                 );
-              ctx.fillStyle = colors.logLight;
+                ctx.fillStyle = colors.logLight;
                 ctx.fillRect(
                   startX + tileCell,
                   y + tileCell / 2,
@@ -556,7 +588,7 @@
                   notch < startX + width - tileCell;
                   notch += tileCell * 1.5
                 ) {
-                ctx.fillStyle = colors.logShadow;
+                  ctx.fillStyle = colors.logShadow;
                   ctx.fillRect(
                     notch,
                     y + tileCell / 2,
@@ -566,46 +598,16 @@
                 }
               }
             },
-        },
-        {
-          name: 'redX',
-            weight: 2, // Reduced to 1/3 of original weight (5 -> 2)
-          draw(ctx) {
-              // Always use grass sprite
-              ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
-            const maxIndex = cellsPerTile - 1;
-            for (let y = 0; y < cellsPerTile; y++) {
-              for (let x = 0; x < cellsPerTile; x++) {
-                const diag1 = Math.abs(x - y);
-                const diag2 = Math.abs(x + y - maxIndex);
-                const onX = diag1 <= 1 || diag2 <= 1;
-                if (!onX) continue;
-                let color = colors.redBase;
-                if (diag1 === 0 && diag2 === 0) {
-                  color = colors.redBright;
-                  } else if (
-                    diag1 === 1 ||
-                    diag2 === 1 ||
-                    x === 0 ||
-                    y === 0 ||
-                    x === maxIndex ||
-                    y === maxIndex
-                  ) {
-                  color = colors.redDark;
-                }
-                fillCell(ctx, x, y, color);
-              }
-            }
-            },
           },
           {
-            name: 'secretX',
-            weight: 1, // Rarer than redX tiles (redX is 2)
+            name: 'redX',
+            weight: 2, // Reduced to 1/3 of original weight (5 -> 2)
             draw(ctx) {
-              // Always use grass sprite
+              // Always use grass sprite (only draw if loaded)
               ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              if (grassSprite.complete && grassSprite.naturalWidth > 0) {
+                ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              }
               const maxIndex = cellsPerTile - 1;
               for (let y = 0; y < cellsPerTile; y++) {
                 for (let x = 0; x < cellsPerTile; x++) {
@@ -613,9 +615,9 @@
                   const diag2 = Math.abs(x + y - maxIndex);
                   const onX = diag1 <= 1 || diag2 <= 1;
                   if (!onX) continue;
-                  let color = colors.secretGold;
+                  let color = colors.redBase;
                   if (diag1 === 0 && diag2 === 0) {
-                    color = colors.secretGoldBright;
+                    color = colors.redBright;
                   } else if (
                     diag1 === 1 ||
                     diag2 === 1 ||
@@ -624,11 +626,24 @@
                     x === maxIndex ||
                     y === maxIndex
                   ) {
-                    color = colors.secretGoldDark;
+                    color = colors.redDark;
                   }
                   fillCell(ctx, x, y, color);
                 }
               }
+            },
+          },
+          {
+            name: 'secretX',
+            weight: 2, // Twice as common (doubled from 1)
+            draw(ctx) {
+              // Always use grass sprite (only draw if loaded)
+              // Secret X tiles are completely invisible - just show grass
+              ctx.imageSmoothingEnabled = false;
+              if (grassSprite.complete && grassSprite.naturalWidth > 0) {
+                ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              }
+              // No X pattern drawn - completely invisible to player
             },
           },
         ];
@@ -638,43 +653,43 @@
           0
         );
 
-      function pickTileDefinition() {
-        let roll = Math.random() * tileWeightTotal;
-        for (const def of tileDefinitions) {
-          if ((roll -= def.weight) <= 0) {
-            return def;
+        function pickTileDefinition() {
+          let roll = Math.random() * tileWeightTotal;
+          for (const def of tileDefinitions) {
+            if ((roll -= def.weight) <= 0) {
+              return def;
+            }
           }
+          return tileDefinitions[0];
         }
-        return tileDefinitions[0];
-      }
 
-      // Helper function to check if a tile position overlaps with any tree
-      function isTreeAtTile(row, col) {
-        const tileCenterX = (col + 0.5) * tileSize;
-        const tileCenterY = (row + 0.5) * tileSize;
+        // Helper function to check if a tile position overlaps with any tree
+        function isTreeAtTile(row, col) {
+          const tileCenterX = (col + 0.5) * tileSize;
+          const tileCenterY = (row + 0.5) * tileSize;
 
-        for (let i = 0; i < flora.trees.length; i++) {
-          const tree = flora.trees[i];
-          const dx = tree.x - tileCenterX;
-          const dy = tree.y - tileCenterY;
-          const distSq = dx * dx + dy * dy;
-          const treeRadius = tree.colliderRadius || tree.size * 0.42;
+          for (let i = 0; i < flora.trees.length; i++) {
+            const tree = flora.trees[i];
+            const dx = tree.x - tileCenterX;
+            const dy = tree.y - tileCenterY;
+            const distSq = dx * dx + dy * dy;
+            const treeRadius = tree.colliderRadius || tree.size * 0.42;
             const minDistSq =
               (tileSize / 2 + treeRadius) * (tileSize / 2 + treeRadius);
 
-          if (distSq < minDistSq) {
-            return true;
+            if (distSq < minDistSq) {
+              return true;
+            }
           }
+          return false;
         }
-        return false;
-      }
 
-      // Generate tiles with check for trees
-      const tileMap = [];
-      for (let row = 0; row < tileRows; row++) {
-        tileMap[row] = [];
-        for (let col = 0; col < tileCols; col++) {
-          let def = pickTileDefinition();
+        // Generate tiles with check for trees
+        const tileMap = [];
+        for (let row = 0; row < tileRows; row++) {
+          tileMap[row] = [];
+          for (let col = 0; col < tileCols; col++) {
+            let def = pickTileDefinition();
 
             // If redX or secretX tile was picked and there's a tree at this position, replace with grass
             if (
@@ -682,71 +697,79 @@
               isTreeAtTile(row, col)
             ) {
               def = tileDefinitions.find((d) => d.name === 'grass');
-          }
+            }
 
-          tileMap[row][col] = {
-            name: def.name,
+            tileMap[row][col] = {
+              name: def.name,
               canvas: createTileCanvas(def.draw),
-          };
+            };
+          }
         }
-      }
 
-      const player = {
-        x: world.width / 2,
-        y: world.height - 40,
-        width: 43,
-        height: 43,
-        color: '#7cffb3', // Original teal/green player color
-        outline: '#0c2a19',
-        vx: 0,
-        vy: 0,
-        maxSpeed: 2.0,
-        accel: 0.25,
-        friction: 0.86,
-        sprintMultiplier: 1.6,
+        // If sprites were already loaded before tiles were created, regenerate now
+        if (
+          (grassSprite.complete && grassSprite.naturalWidth > 0) ||
+          (flowerSprite.complete && flowerSprite.naturalWidth > 0)
+        ) {
+          regenerateTiles();
+        }
+
+        const player = {
+          x: world.width / 2,
+          y: world.height - 40,
+          width: 43,
+          height: 43,
+          color: '#7cffb3', // Original teal/green player color
+          outline: '#0c2a19',
+          vx: 0,
+          vy: 0,
+          maxSpeed: 2.0,
+          accel: 0.25,
+          friction: 0.86,
+          sprintMultiplier: 1.6,
           radius: Math.max(39, 39) * 0.5, // Cache radius calculation
-      };
+        };
 
-      // Stamina system for sprinting
-      const stamina = {
-        current: 100,
-        max: 100,
+        // Stamina system for sprinting
+        const stamina = {
+          current: 100,
+          max: 100,
           drainPerSecond: 35, // how fast stamina drains while sprinting
           regenPerSecond: 22, // how fast stamina regenerates when not sprinting
           minToSprint: 8, // must have at least this much to initiate sprint
           exhausted: false, // when true, cannot sprint until fully recovered
-      };
+        };
 
-      // Cache gradients for stamina bar (created once, reused)
-      let staminaBarGradients = null;
-      function initStaminaGradients() {
-        if (staminaBarGradients) return; // Already initialized
-        const barW = 220;
-        const barX = 16.5;
+        // Cache gradients for stamina bar (created once, reused)
+        let staminaBarGradients = null;
+        function initStaminaGradients() {
+          if (staminaBarGradients) return; // Already initialized
+          const barW = 220;
+          const barX = 16.5;
           const normalGradient = ctx.createLinearGradient(
             barX,
             0,
             barX + barW,
             0
           );
-        normalGradient.addColorStop(0, '#51ff8a'); // Original teal/green
-        normalGradient.addColorStop(1, '#7cffb3'); // Original teal/green
+          normalGradient.addColorStop(0, '#51ff8a'); // Original teal/green
+          normalGradient.addColorStop(1, '#7cffb3'); // Original teal/green
           const exhaustedGradient = ctx.createLinearGradient(
             barX,
             0,
             barX + barW,
             0
           );
-        exhaustedGradient.addColorStop(0, '#ff4d4f');
-        exhaustedGradient.addColorStop(1, '#ff7875');
+          exhaustedGradient.addColorStop(0, '#ff4d4f');
+          exhaustedGradient.addColorStop(1, '#ff7875');
           staminaBarGradients = {
             normal: normalGradient,
             exhausted: exhaustedGradient,
           };
-      }
+        }
 
-      // Money system
-      const money = {
+        // Money system
+        const money = {
           amount: 0,
         };
 
@@ -755,65 +778,85 @@
           active: false,
           message:
             'Your museum lost funding after displaying too many fakes. Try again!',
-      };
+        };
 
-      // Shop system
-      const shop = {
-        open: false,
-        items: [
-            { name: 'Simple shovel', tier: 1, price: 25 },
-            { name: 'Iron Shovel', tier: 2, price: 200 },
-            { name: 'Steel Shovel', tier: 3, price: 350 },
-            { name: 'Diamond Shovel', tier: 4, price: 500 },
-            { name: 'Legendary Shovel', tier: 5, price: 2000 },
+        // Shop system
+        const shop = {
+          open: false,
+          currentTab: 0, // 0 = Shovels, 1 = Equipment
+          tabs: [
+            {
+              name: 'Shovels',
+              items: [
+                { name: 'Simple shovel', tier: 1, price: 25, type: 'shovel' },
+                { name: 'Iron Shovel', tier: 2, price: 200, type: 'shovel' },
+                { name: 'Steel Shovel', tier: 3, price: 350, type: 'shovel' },
+                { name: 'Diamond Shovel', tier: 4, price: 500, type: 'shovel' },
+                {
+                  name: 'Legendary Shovel',
+                  tier: 5,
+                  price: 2000,
+                  type: 'shovel',
+                },
+              ],
+            },
+            {
+              name: 'Equipment',
+              items: [
+                { name: 'Radar', tier: 0, price: 0, type: 'equipment' }, // $0 for testing
+              ],
+            },
           ],
-      };
+          get items() {
+            return this.tabs[this.currentTab].items;
+          },
+        };
 
-      // Shopkeeper NPC
-      const shopkeeper = {
-        x: world.width - 100,
-        y: world.height - 100,
-        radius: 20,
-        dialogue: null, // Current dialogue text
-        dialogueStage: 0, // 0 = none, 1 = "Hello", 2 = "What would you like?"
+        // Shopkeeper NPC
+        const shopkeeper = {
+          x: world.width - 100,
+          y: world.height - 100,
+          radius: 20,
+          dialogue: null, // Current dialogue text
+          dialogueStage: 0, // 0 = none, 1 = "Hello", 2 = "What would you like?"
           dialogueTimer: 0,
-      };
+        };
 
-      // Tutorial dialogue system
-      const tutorial = {
-        active: true, // Show tutorial dialogue when game starts
+        // Tutorial dialogue system
+        const tutorial = {
+          active: true, // Show tutorial dialogue when game starts
           dialogue: 'Hey! Over here!',
-      };
+        };
 
-      // Old Guy NPC (positioned to the right of spawn)
-      const oldGuy = {
-        x: world.width / 2 + 150, // To the right of spawn
-        y: world.height - 40, // Same Y as spawn
-        radius: 20,
-        dialogue: null, // Current dialogue text
-        dialogueStage: 0, // Track which dialogue to show (0-5 for initial sequence)
+        // Old Guy NPC (positioned to the right of spawn)
+        const oldGuy = {
+          x: world.width / 2 + 150, // To the right of spawn
+          y: world.height - 40, // Same Y as spawn
+          radius: 20,
+          dialogue: null, // Current dialogue text
+          dialogueStage: 0, // Track which dialogue to show (0-5 for initial sequence)
           hasCompletedIntro: false, // Track if player has completed initial dialogue sequence
-      };
+        };
 
-      // Inventory system
-      const inventory = {
-        open: false,
-        slots: Array(15).fill(null), // 15 inventory slots
+        // Inventory system
+        const inventory = {
+          open: false,
+          slots: Array(15).fill(null), // 15 inventory slots
           equipment: null, // 1 equipment slot
-      };
+        };
 
-      const keys = Object.create(null);
-      const keyJustPressed = Object.create(null); // Track keys that were just pressed this frame
-      const pressed = (code) => keys[code] === true;
+        const keys = Object.create(null);
+        const keyJustPressed = Object.create(null); // Track keys that were just pressed this frame
+        const pressed = (code) => keys[code] === true;
 
         window.addEventListener(
           'keydown',
           (e) => {
-        if (!keys[e.code]) {
-          keyJustPressed[e.code] = true; // Mark as just pressed
-        }
-        keys[e.code] = true;
-        // Prevent arrow keys from scrolling
+            if (!keys[e.code]) {
+              keyJustPressed[e.code] = true; // Mark as just pressed
+            }
+            keys[e.code] = true;
+            // Prevent arrow keys from scrolling
             if (
               [
                 'ArrowUp',
@@ -823,11 +866,11 @@
                 'Space',
               ].includes(e.code)
             ) {
-          e.preventDefault();
-        }
-        // Toggle inventory with E
-        if (e.code === 'KeyE') {
-          e.preventDefault();
+              e.preventDefault();
+            }
+            // Toggle inventory with E
+            if (e.code === 'KeyE') {
+              e.preventDefault();
               // Don't allow opening inventory during minigame or game over
               if (
                 balancingMinigame.active ||
@@ -835,26 +878,26 @@
                 declarationMinigame.active ||
                 gameOver.active
               ) {
-            return;
-          }
-          // Close shop if open
-          if (shop.open) {
-            shop.open = false;
-            shopkeeper.dialogue = null;
-            shopkeeper.dialogueStage = 0;
-          }
-          const wasOpen = inventory.open;
-          inventory.open = !inventory.open;
-          // Kill momentum when opening inventory
-          if (!wasOpen && inventory.open) {
-            player.vx = 0;
-            player.vy = 0;
-          }
-        }
+                return;
+              }
+              // Close shop if open
+              if (shop.open) {
+                shop.open = false;
+                shopkeeper.dialogue = null;
+                shopkeeper.dialogueStage = 0;
+              }
+              const wasOpen = inventory.open;
+              inventory.open = !inventory.open;
+              // Kill momentum when opening inventory
+              if (!wasOpen && inventory.open) {
+                player.vx = 0;
+                player.vy = 0;
+              }
+            }
 
-        // Interaction key Spacebar
-        if (e.code === 'Space') {
-          e.preventDefault();
+            // Interaction key Spacebar
+            if (e.code === 'Space') {
+              e.preventDefault();
               // Don't allow interaction during crouch animation or minigames (minigames use spacebar for their own mechanics)
               if (
                 crouchAnimation.active ||
@@ -862,43 +905,36 @@
                 brushingMinigame.active ||
                 declarationMinigame.active
               ) {
-            return;
-          }
-          // If shop is open, close it
-          if (shop.open) {
-            shop.open = false;
-            shopkeeper.dialogue = null;
-            shopkeeper.dialogueStage = 0;
-            player.vx = 0;
-            player.vy = 0;
-          }
-          // If dialogue is showing, close it
-          else if (tutorial.active) {
-            tutorial.active = false; // Close tutorial
-            player.vx = 0;
-            player.vy = 0;
-          } else if (shopkeeper.dialogue || oldGuy.dialogue) {
-            if (shopkeeper.dialogue) {
-              advanceShopkeeperDialogue();
-            } else if (oldGuy.dialogue) {
-              advanceOldGuyDialogue(); // Advance through dialogue stages
-              player.vx = 0;
-              player.vy = 0;
+                return;
+              }
+              // If shop is open, close it
+              if (shop.open) {
+                shop.open = false;
+                shopkeeper.dialogue = null;
+                shopkeeper.dialogueStage = 0;
+                player.vx = 0;
+                player.vy = 0;
+              }
+              // If dialogue is showing, close it
+              else if (tutorial.active) {
+                tutorial.active = false; // Close tutorial
+                player.vx = 0;
+                player.vy = 0;
+              } else if (shopkeeper.dialogue || oldGuy.dialogue) {
+                if (shopkeeper.dialogue) {
+                  advanceShopkeeperDialogue();
+                } else if (oldGuy.dialogue) {
+                  advanceOldGuyDialogue(); // Advance through dialogue stages
+                  player.vx = 0;
+                  player.vy = 0;
+                }
+              } else {
+                // Otherwise, try to interact
+                handleInteraction();
+              }
             }
-          } else {
-            // Otherwise, try to interact
-            handleInteraction();
-          }
-        }
 
-        // Number keys for shop purchases
-        if (shop.open) {
-          const keyNum = parseInt(e.key);
-          if (keyNum >= 1 && keyNum <= 5) {
-            e.preventDefault();
-            purchaseItem(keyNum - 1);
-          }
-        }
+            // Shop controls removed - now uses mouse clicks only
 
             // Declaration minigame: Removed keyboard controls, now uses buttons
 
@@ -918,10 +954,10 @@
           { passive: false }
         );
 
-      window.addEventListener('keyup', (e) => {
-        keys[e.code] = false;
-        keyJustPressed[e.code] = false;
-      });
+        window.addEventListener('keyup', (e) => {
+          keys[e.code] = false;
+          keyJustPressed[e.code] = false;
+        });
 
         // Track mouse position for hover effects
         let mouseX = 0;
@@ -983,15 +1019,89 @@
               handleDeclarationAnswer(false); // Throw away = Fake
               return;
             }
+
+            // Close button (X) in top-right corner
+            const closeButtonSize = 40; // Same size as in render function
+            const closeButtonX = panelX + panelWidth - closeButtonSize - 10;
+            const closeButtonY = panelY + 10;
+            if (
+              x >= closeButtonX &&
+              x <= closeButtonX + closeButtonSize &&
+              y >= closeButtonY &&
+              y <= closeButtonY + closeButtonSize
+            ) {
+              // Close the minigame without answering
+              declarationMinigame.active = false;
+              return;
+            }
+          }
+
+          // Shop menu click handling
+          if (shop.open) {
+            const shopWidth = 400;
+            const itemHeight = 50;
+            const itemPadding = 10;
+            const titleHeight = 40;
+            const tabHeight = 30;
+            const instructionsHeight = 25;
+            const topPadding = 15;
+            const bottomPadding = 15;
+            const shopHeight =
+              titleHeight +
+              tabHeight +
+              topPadding +
+              shop.items.length * itemHeight +
+              (shop.items.length - 1) * itemPadding +
+              bottomPadding +
+              instructionsHeight;
+            const shopX = Math.round(canvas.width / 2 - shopWidth / 2) + 0.5;
+            const shopY = Math.round(canvas.height / 2 - shopHeight / 2) + 0.5;
+
+            // Check if clicking on tabs
+            const tabWidth = shopWidth / shop.tabs.length;
+            for (let i = 0; i < shop.tabs.length; i++) {
+              const tabX = shopX + i * tabWidth;
+              const tabY = shopY + titleHeight;
+              if (
+                x >= tabX &&
+                x <= tabX + tabWidth &&
+                y >= tabY &&
+                y <= tabY + tabHeight
+              ) {
+                shop.currentTab = i;
+                return;
+              }
+            }
+
+            // Check if clicking on items
+            const startY = shopY + titleHeight + tabHeight + topPadding;
+            for (let i = 0; i < shop.items.length; i++) {
+              const item = shop.items[i];
+              const itemY = startY + i * (itemHeight + itemPadding);
+              const itemRectX = shopX + 20;
+              const itemRectY = itemY;
+              const itemRectW = shopWidth - 40;
+              const itemRectH = itemHeight;
+
+              if (
+                x >= itemRectX &&
+                x <= itemRectX + itemRectW &&
+                y >= itemRectY &&
+                y <= itemRectY + itemRectH
+              ) {
+                purchaseItem(i);
+                return;
+              }
+            }
           }
         });
 
-      function clamp(value, min, max) {
-        return Math.min(max, Math.max(min, value));
-      }
+        function clamp(value, min, max) {
+          return Math.min(max, Math.max(min, value));
+        }
 
-      function update(dtMs) {
-        const dt = (dtMs || 16.67) / 1000; // seconds
+        function update(dtMs) {
+          const dt = (dtMs || 16.67) / 1000; // seconds
 
           // Only update player movement if inventory is closed, shop is closed, dialogue is not showing, tutorial is not active, crouch animation is not active, and minigame is not active
           if (
@@ -1006,9 +1116,9 @@
             !declarationMinigame.active &&
             !gameOver.active
           ) {
-          const wantsSprint = pressed('ShiftLeft') || pressed('ShiftRight');
+            const wantsSprint = pressed('ShiftLeft') || pressed('ShiftRight');
 
-          // Decouple boost from draining so the bar can reach 0
+            // Decouple boost from draining so the bar can reach 0
             const hasInput =
               pressed('ArrowLeft') ||
               pressed('KeyA') ||
@@ -1035,90 +1145,90 @@
               ? player.maxSpeed * player.sprintMultiplier
               : player.maxSpeed;
 
-          // Input axes
-          let ax = 0;
-          let ay = 0;
-          if (pressed('ArrowLeft') || pressed('KeyA')) ax -= accel;
-          if (pressed('ArrowRight') || pressed('KeyD')) ax += accel;
-          if (pressed('ArrowUp') || pressed('KeyW')) ay -= accel;
-          if (pressed('ArrowDown') || pressed('KeyS')) ay += accel;
+            // Input axes
+            let ax = 0;
+            let ay = 0;
+            if (pressed('ArrowLeft') || pressed('KeyA')) ax -= accel;
+            if (pressed('ArrowRight') || pressed('KeyD')) ax += accel;
+            if (pressed('ArrowUp') || pressed('KeyW')) ay -= accel;
+            if (pressed('ArrowDown') || pressed('KeyS')) ay += accel;
 
-          player.vx += ax;
-          player.vy += ay;
+            player.vx += ax;
+            player.vy += ay;
 
-          // Apply friction only when no input along that axis to keep controls snappy
-          if (ax === 0) player.vx *= player.friction;
-          if (ay === 0) player.vy *= player.friction;
+            // Apply friction only when no input along that axis to keep controls snappy
+            if (ax === 0) player.vx *= player.friction;
+            if (ay === 0) player.vy *= player.friction;
 
-          // Cap speed
-          const speed = Math.hypot(player.vx, player.vy);
-          if (speed > maxSpeed) {
-            const s = maxSpeed / speed;
-            player.vx *= s;
-            player.vy *= s;
-          }
+            // Cap speed
+            const speed = Math.hypot(player.vx, player.vy);
+            if (speed > maxSpeed) {
+              const s = maxSpeed / speed;
+              player.vx *= s;
+              player.vy *= s;
+            }
 
-        player.x += player.vx;
-        player.y += player.vy;
+            player.x += player.vx;
+            player.y += player.vy;
 
-        resolveTreeCollisions();
-        resolveShopkeeperCollision();
-        resolveOldGuyCollision();
+            resolveTreeCollisions();
+            resolveShopkeeperCollision();
+            resolveOldGuyCollision();
 
-        // Update walking animation with speed based on sprinting
-        const isMoving = Math.hypot(player.vx, player.vy) > 0.1;
-        if (isMoving) {
-          // 75% slower when walking, 125% faster when sprinting
-          const animationMultiplier = allowBoost ? 1.25 : 0.75;
+            // Update walking animation with speed based on sprinting
+            const isMoving = Math.hypot(player.vx, player.vy) > 0.1;
+            if (isMoving) {
+              // 75% slower when walking, 125% faster when sprinting
+              const animationMultiplier = allowBoost ? 1.25 : 0.75;
               walkAnimationFrame +=
                 dt * 60 * walkAnimationSpeed * animationMultiplier; // Normalize to 60fps
-        } else {
-          walkAnimationFrame = 0; // Reset to idle when not moving
-        }
+            } else {
+              walkAnimationFrame = 0; // Reset to idle when not moving
+            }
 
-          // Stamina update
-          if (shouldDrain) {
-            stamina.current -= stamina.drainPerSecond * dt;
-          } else {
-            stamina.current += stamina.regenPerSecond * dt;
+            // Stamina update
+            if (shouldDrain) {
+              stamina.current -= stamina.drainPerSecond * dt;
+            } else {
+              stamina.current += stamina.regenPerSecond * dt;
+            }
+            stamina.current = clamp(stamina.current, 0, stamina.max);
+
+            // Exhaustion rules: lock sprint when empty until fully refilled
+            if (stamina.current <= 0.0001) {
+              stamina.exhausted = true;
+            } else if (stamina.current >= stamina.max - 0.0001) {
+              stamina.exhausted = false;
+            }
+
+            // World bounds (keep player fully inside)
+            const halfW = player.width / 2;
+            const halfH = player.height / 2;
+            player.x = clamp(player.x, halfW, world.width - halfW);
+            player.y = clamp(player.y, halfH, world.height - halfH);
           }
-          stamina.current = clamp(stamina.current, 0, stamina.max);
 
-          // Exhaustion rules: lock sprint when empty until fully refilled
-          if (stamina.current <= 0.0001) {
-            stamina.exhausted = true;
-          } else if (stamina.current >= stamina.max - 0.0001) {
-            stamina.exhausted = false;
-          }
-
-          // World bounds (keep player fully inside)
-          const halfW = player.width / 2;
-          const halfH = player.height / 2;
-          player.x = clamp(player.x, halfW, world.width - halfW);
-          player.y = clamp(player.y, halfH, world.height - halfH);
-        }
-
-        // Clear keyJustPressed at end of frame
+          // Clear keyJustPressed at end of frame
           Object.keys(keyJustPressed).forEach(
             (key) => (keyJustPressed[key] = false)
           );
 
-        // Camera follow (smoothly move camera toward player)
-        const targetX = player.x;
-        const targetY = player.y;
-        camera.x += (targetX - camera.x) * camera.followLerp;
-        camera.y += (targetY - camera.y) * camera.followLerp;
+          // Camera follow (smoothly move camera toward player)
+          const targetX = player.x;
+          const targetY = player.y;
+          camera.x += (targetX - camera.x) * camera.followLerp;
+          camera.y += (targetY - camera.y) * camera.followLerp;
 
-        // Clamp camera so it doesn't show outside world
-        const halfViewW = canvas.width / 2;
-        const halfViewH = canvas.height / 2;
-        camera.x = clamp(camera.x, halfViewW, world.width - halfViewW);
-        camera.y = clamp(camera.y, halfViewH, world.height - halfViewH);
+          // Clamp camera so it doesn't show outside world
+          const halfViewW = canvas.width / 2;
+          const halfViewH = canvas.height / 2;
+          camera.x = clamp(camera.x, halfViewW, world.width - halfViewW);
+          camera.y = clamp(camera.y, halfViewH, world.height - halfViewH);
 
-        // Round camera to integer pixels to prevent sub-pixel jitter
-        // This ensures the translate() call produces consistent pixel-aligned results
-        camera.x = Math.round(camera.x);
-        camera.y = Math.round(camera.y);
+          // Round camera to integer pixels to prevent sub-pixel jitter
+          // This ensures the translate() call produces consistent pixel-aligned results
+          camera.x = Math.round(camera.x);
+          camera.y = Math.round(camera.y);
 
           // Update crouch animation
           if (crouchAnimation.active) {
@@ -1174,84 +1284,85 @@
             }
           }
 
-        updateBalancingMinigame(dtMs);
-        updateBrushingMinigame(dtMs);
+          updateBalancingMinigame(dtMs);
+          updateBrushingMinigame(dtMs);
           updateDeclarationMinigame(dtMs);
-      }
+          updateRadar(dtMs);
+        }
 
-      function drawGrid() {
-        // Performance: Only draw grid if visible (optional - can be disabled entirely if still laggy)
-        // For now, keeping it but optimizing viewport calculations
-        const step = 50;
-        ctx.save();
-        ctx.lineWidth = 1;
+        function drawGrid() {
+          // Performance: Only draw grid if visible (optional - can be disabled entirely if still laggy)
+          // For now, keeping it but optimizing viewport calculations
+          const step = 50;
+          ctx.save();
+          ctx.lineWidth = 1;
 
-        // Viewport culling: only draw grid lines visible on screen
-        const halfCanvasW = canvas.width / 2;
-        const halfCanvasH = canvas.height / 2;
-        const viewLeft = camera.x - halfCanvasW;
-        const viewTop = camera.y - halfCanvasH;
-        const viewRight = camera.x + halfCanvasW;
-        const viewBottom = camera.y + halfCanvasH;
+          // Viewport culling: only draw grid lines visible on screen
+          const halfCanvasW = canvas.width / 2;
+          const halfCanvasH = canvas.height / 2;
+          const viewLeft = camera.x - halfCanvasW;
+          const viewTop = camera.y - halfCanvasH;
+          const viewRight = camera.x + halfCanvasW;
+          const viewBottom = camera.y + halfCanvasH;
 
-        const startX = Math.max(0, Math.floor(viewLeft / step) * step);
+          const startX = Math.max(0, Math.floor(viewLeft / step) * step);
           const endX = Math.min(
             world.width,
             Math.ceil(viewRight / step) * step
           );
-        const startY = Math.max(0, Math.floor(viewTop / step) * step);
+          const startY = Math.max(0, Math.floor(viewTop / step) * step);
           const endY = Math.min(
             world.height,
             Math.ceil(viewBottom / step) * step
           );
 
-        // Batch strokes by color to reduce state changes
-        for (let x = startX; x <= endX; x += step) {
+          // Batch strokes by color to reduce state changes
+          for (let x = startX; x <= endX; x += step) {
             ctx.strokeStyle =
               x % 200 === 0 ? 'rgba(139,111,71,0.18)' : 'rgba(139,111,71,0.08)'; // Brown grid
-          ctx.beginPath();
-          ctx.moveTo(x + 0.5, viewTop);
-          ctx.lineTo(x + 0.5, viewBottom);
-          ctx.stroke();
-        }
-        for (let y = startY; y <= endY; y += step) {
+            ctx.beginPath();
+            ctx.moveTo(x + 0.5, viewTop);
+            ctx.lineTo(x + 0.5, viewBottom);
+            ctx.stroke();
+          }
+          for (let y = startY; y <= endY; y += step) {
             ctx.strokeStyle =
               y % 200 === 0 ? 'rgba(139,111,71,0.18)' : 'rgba(139,111,71,0.08)'; // Brown grid
-          ctx.beginPath();
-          ctx.moveTo(viewLeft, y + 0.5);
-          ctx.lineTo(viewRight, y + 0.5);
-          ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(viewLeft, y + 0.5);
+            ctx.lineTo(viewRight, y + 0.5);
+            ctx.stroke();
+          }
+          ctx.restore();
         }
-        ctx.restore();
-      }
 
-      function drawTiles() {
-        ctx.save();
-        // Viewport culling: only draw tiles visible on screen
-        const viewLeft = camera.x - canvas.width / 2;
-        const viewTop = camera.y - canvas.height / 2;
-        const viewRight = camera.x + canvas.width / 2;
-        const viewBottom = camera.y + canvas.height / 2;
+        function drawTiles() {
+          ctx.save();
+          // Viewport culling: only draw tiles visible on screen
+          const viewLeft = camera.x - canvas.width / 2;
+          const viewTop = camera.y - canvas.height / 2;
+          const viewRight = camera.x + canvas.width / 2;
+          const viewBottom = camera.y + canvas.height / 2;
 
-        const startRow = Math.max(0, Math.floor(viewTop / tileSize) - 1);
+          const startRow = Math.max(0, Math.floor(viewTop / tileSize) - 1);
           const endRow = Math.min(
             tileRows - 1,
             Math.ceil(viewBottom / tileSize) + 1
           );
-        const startCol = Math.max(0, Math.floor(viewLeft / tileSize) - 1);
+          const startCol = Math.max(0, Math.floor(viewLeft / tileSize) - 1);
           const endCol = Math.min(
             tileCols - 1,
             Math.ceil(viewRight / tileSize) + 1
           );
 
-        for (let row = startRow; row <= endRow; row++) {
-          for (let col = startCol; col <= endCol; col++) {
-            const tile = tileMap[row][col];
-            if (tile && tile.canvas) {
-              // Draw tiles at exact integer pixel positions to prevent seams
-              // Add 1px overlap to eliminate gaps between tiles
-              const tileX = Math.floor(col * tileSize);
-              const tileY = Math.floor(row * tileSize);
+          for (let row = startRow; row <= endRow; row++) {
+            for (let col = startCol; col <= endCol; col++) {
+              const tile = tileMap[row][col];
+              if (tile && tile.canvas) {
+                // Draw tiles at exact integer pixel positions to prevent seams
+                // Add 1px overlap to eliminate gaps between tiles
+                const tileX = Math.floor(col * tileSize);
+                const tileY = Math.floor(row * tileSize);
                 ctx.drawImage(
                   tile.canvas,
                   tileX,
@@ -1259,33 +1370,51 @@
                   tileSize + 1,
                   tileSize + 1
                 );
+              }
             }
           }
+          ctx.restore();
         }
-        ctx.restore();
-      }
 
-      function resolveTreeCollisions() {
-        const playerRadius = player.radius; // Use cached radius
-        const maxCheckDistance = 150;
-        const maxCheckDistanceSq = maxCheckDistance * maxCheckDistance;
+        function resolveTreeCollisions() {
+          const playerRadius = player.radius; // Use cached radius
+          const maxCheckDistance = 150;
+          const maxCheckDistanceSq = maxCheckDistance * maxCheckDistance;
 
-        // Early exit optimization: use squared distances to avoid sqrt
-        for (let i = 0; i < flora.trees.length; i++) {
-          const tree = flora.trees[i];
-          const dx = player.x - tree.x;
-          const dy = player.y - tree.y;
-          const distSq = dx * dx + dy * dy;
+          // Early exit optimization: use squared distances to avoid sqrt
+          for (let i = 0; i < flora.trees.length; i++) {
+            const tree = flora.trees[i];
+            const dx = player.x - tree.x;
+            const dy = player.y - tree.y;
+            const distSq = dx * dx + dy * dy;
 
-          // Quick distance check first (no sqrt needed)
-          if (distSq > maxCheckDistanceSq) continue;
+            // Quick distance check first (no sqrt needed)
+            if (distSq > maxCheckDistanceSq) continue;
 
-          const treeRadius = tree.colliderRadius;
-          const minDist = treeRadius + playerRadius;
-          const minDistSq = minDist * minDist;
+            const treeRadius = tree.colliderRadius;
+            const minDist = treeRadius + playerRadius;
+            const minDistSq = minDist * minDist;
 
             if (distSq < minDistSq && distSq > 0) {
               // Avoid division by zero
+              const dist = Math.sqrt(distSq);
+              const overlap = minDist - dist;
+              const invDist = 1 / dist; // Cache inverse distance
+              player.x += dx * invDist * overlap;
+              player.y += dy * invDist * overlap;
+            }
+          }
+        }
+
+        function resolveShopkeeperCollision() {
+          const playerRadius = player.radius; // Use cached radius
+          const dx = player.x - shopkeeper.x;
+          const dy = player.y - shopkeeper.y;
+          const distSq = dx * dx + dy * dy;
+          const minDist = shopkeeper.radius + playerRadius;
+          const minDistSq = minDist * minDist;
+
+          if (distSq < minDistSq && distSq > 0) {
             const dist = Math.sqrt(distSq);
             const overlap = minDist - dist;
             const invDist = 1 / dist; // Cache inverse distance
@@ -1293,148 +1422,143 @@
             player.y += dy * invDist * overlap;
           }
         }
-      }
 
-      function resolveShopkeeperCollision() {
-        const playerRadius = player.radius; // Use cached radius
-        const dx = player.x - shopkeeper.x;
-        const dy = player.y - shopkeeper.y;
-        const distSq = dx * dx + dy * dy;
-        const minDist = shopkeeper.radius + playerRadius;
-        const minDistSq = minDist * minDist;
+        function resolveOldGuyCollision() {
+          const playerRadius = player.radius; // Use cached radius
+          const dx = player.x - oldGuy.x;
+          const dy = player.y - oldGuy.y;
+          const distSq = dx * dx + dy * dy;
+          const minDist = oldGuy.radius + playerRadius;
+          const minDistSq = minDist * minDist;
 
-        if (distSq < minDistSq && distSq > 0) {
-          const dist = Math.sqrt(distSq);
-          const overlap = minDist - dist;
-          const invDist = 1 / dist; // Cache inverse distance
-          player.x += dx * invDist * overlap;
-          player.y += dy * invDist * overlap;
-        }
-      }
-
-      function resolveOldGuyCollision() {
-        const playerRadius = player.radius; // Use cached radius
-        const dx = player.x - oldGuy.x;
-        const dy = player.y - oldGuy.y;
-        const distSq = dx * dx + dy * dy;
-        const minDist = oldGuy.radius + playerRadius;
-        const minDistSq = minDist * minDist;
-
-        if (distSq < minDistSq && distSq > 0) {
-          const dist = Math.sqrt(distSq);
-          const overlap = minDist - dist;
-          const invDist = 1 / dist; // Cache inverse distance
-          player.x += dx * invDist * overlap;
-          player.y += dy * invDist * overlap;
-        }
-      }
-
-      function advanceShopkeeperDialogue() {
-        if (shopkeeper.dialogueStage === 1) {
-          // After "Hello", show "What would you like?"
-            shopkeeper.dialogue = 'What would you like?';
-          shopkeeper.dialogueStage = 2;
-        } else if (shopkeeper.dialogueStage === 2) {
-          // After "What would you like?", open shop menu
-          // Close inventory if open
-          if (inventory.open) {
-            inventory.open = false;
+          if (distSq < minDistSq && distSq > 0) {
+            const dist = Math.sqrt(distSq);
+            const overlap = minDist - dist;
+            const invDist = 1 / dist; // Cache inverse distance
+            player.x += dx * invDist * overlap;
+            player.y += dy * invDist * overlap;
           }
-          shop.open = true;
-          shopkeeper.dialogue = null;
-          shopkeeper.dialogueStage = 0;
         }
-      }
 
-      function advanceOldGuyDialogue() {
-        // Progress through the Old Guy's dialogue sequence
-        if (!oldGuy.hasCompletedIntro) {
-          // Initial dialogue sequence
-          oldGuy.dialogueStage++;
+        function advanceShopkeeperDialogue() {
+          if (shopkeeper.dialogueStage === 1) {
+            // After "Hello!", check if player has money
+            if (money.amount > 0) {
+              // Player has money - show shop message
+              shopkeeper.dialogue =
+                'I see you have some cash on you. You can buy shovels from my shop for extra cash, or a radar to find hidden objects.';
+              shopkeeper.dialogueStage = 2;
+            } else {
+              // Player has no money - tell them to go dig
+              shopkeeper.dialogue =
+                "Looks like you don't have any money on you. Go and dig up some artifacts, then we can talk.";
+              shopkeeper.dialogueStage = 3; // Set to 3 so dialogue closes on next press
+            }
+          } else if (shopkeeper.dialogueStage === 2) {
+            // After the shop message (only if player has money), open shop menu
+            // Close inventory if open
+            if (inventory.open) {
+              inventory.open = false;
+            }
+            shop.open = true;
+            shopkeeper.dialogue = null;
+            shopkeeper.dialogueStage = 0;
+          } else if (shopkeeper.dialogueStage === 3) {
+            // Close dialogue after "no money" message
+            shopkeeper.dialogue = null;
+            shopkeeper.dialogueStage = 0;
+          }
+        }
 
-          if (oldGuy.dialogueStage === 1) {
+        function advanceOldGuyDialogue() {
+          // Progress through the Old Guy's dialogue sequence
+          if (!oldGuy.hasCompletedIntro) {
+            // Initial dialogue sequence
+            oldGuy.dialogueStage++;
+
+            if (oldGuy.dialogueStage === 1) {
               oldGuy.dialogue =
                 'Well, here we are. The newly discovered "Battle of the hills" historical site!';
-          } else if (oldGuy.dialogueStage === 2) {
+            } else if (oldGuy.dialogueStage === 2) {
               oldGuy.dialogue =
                 'It is time for you to uncover the history of this place!';
-          } else if (oldGuy.dialogueStage === 3) {
+            } else if (oldGuy.dialogueStage === 3) {
               oldGuy.dialogue = 'Are you ready?';
-          } else if (oldGuy.dialogueStage === 4) {
+            } else if (oldGuy.dialogueStage === 4) {
               oldGuy.dialogue = 'Dig up those holes with Spacebar!';
-          } else if (oldGuy.dialogueStage >= 5) {
-            // Completed the intro sequence
-            oldGuy.dialogue = null;
-            oldGuy.hasCompletedIntro = true;
-            oldGuy.dialogueStage = 0;
-          }
-        } else {
-          // After intro is complete, just close the "hurry up" message
-          oldGuy.dialogue = null;
-        }
-      }
-
-      function handleInteraction() {
-        // Don't interact if inventory is open
-        if (inventory.open) {
-          return;
-        }
-
-        // Don't start new dialogue if one is already showing
-        if (shopkeeper.dialogue || oldGuy.dialogue) {
-          return;
-        }
-
-        // Check if player is touching old guy (collision-based)
-        const playerRadius = player.radius; // Use cached radius
-        let dx = player.x - oldGuy.x;
-        let dy = player.y - oldGuy.y;
-        let distSq = dx * dx + dy * dy;
-        let minDist = oldGuy.radius + playerRadius;
-        let minDistSq = minDist * minDist;
-
-        // Allow interaction when very close (within collision distance + small buffer)
-        if (distSq <= minDistSq * 1.2) {
-          // Set dialogue based on whether intro is completed
-          if (!oldGuy.hasCompletedIntro) {
-            // Start the intro dialogue sequence
-            oldGuy.dialogueStage = 0;
-              oldGuy.dialogue = 'Hello there!';
+            } else if (oldGuy.dialogueStage >= 5) {
+              // Completed the intro sequence
+              oldGuy.dialogue = null;
+              oldGuy.hasCompletedIntro = true;
+              oldGuy.dialogueStage = 0;
+            }
           } else {
-            // Show the "hurry up" message after intro is done
+            // After intro is complete, just close the "hurry up" message
+            oldGuy.dialogue = null;
+          }
+        }
+
+        function handleInteraction() {
+          // Don't interact if inventory is open
+          if (inventory.open) {
+            return;
+          }
+
+          // Don't start new dialogue if one is already showing
+          if (shopkeeper.dialogue || oldGuy.dialogue) {
+            return;
+          }
+
+          // Check if player is touching old guy (collision-based)
+          const playerRadius = player.radius; // Use cached radius
+          let dx = player.x - oldGuy.x;
+          let dy = player.y - oldGuy.y;
+          let distSq = dx * dx + dy * dy;
+          let minDist = oldGuy.radius + playerRadius;
+          let minDistSq = minDist * minDist;
+
+          // Allow interaction when very close (within collision distance + small buffer)
+          if (distSq <= minDistSq * 1.2) {
+            // Set dialogue based on whether intro is completed
+            if (!oldGuy.hasCompletedIntro) {
+              // Start the intro dialogue sequence
+              oldGuy.dialogueStage = 0;
+              oldGuy.dialogue = 'Hello there!';
+            } else {
+              // Show the "hurry up" message after intro is done
               oldGuy.dialogue =
                 'What are you waiting for? Get going! Dig those holes with Spacebar!';
+            }
+            // Kill momentum when opening dialogue
+            player.vx = 0;
+            player.vy = 0;
+            return;
           }
-          // Kill momentum when opening dialogue
-          player.vx = 0;
-          player.vy = 0;
-          return;
-        }
 
-        // Check if player is touching shopkeeper (collision-based)
-        dx = player.x - shopkeeper.x;
-        dy = player.y - shopkeeper.y;
-        distSq = dx * dx + dy * dy;
-        minDist = shopkeeper.radius + playerRadius;
-        minDistSq = minDist * minDist;
+          // Check if player is touching shopkeeper (collision-based)
+          dx = player.x - shopkeeper.x;
+          dy = player.y - shopkeeper.y;
+          distSq = dx * dx + dy * dy;
+          minDist = shopkeeper.radius + playerRadius;
+          minDistSq = minDist * minDist;
 
-        // Allow interaction when very close (within collision distance + small buffer)
-        if (distSq <= minDistSq * 1.2) {
-            shopkeeper.dialogue = 'Hello';
-          shopkeeper.dialogueStage = 1;
-          shopkeeper.dialogueTimer = 0; // Don't auto-close, wait for Spacebar press
-          // Kill momentum when opening dialogue
-          player.vx = 0;
-          player.vy = 0;
-          return;
-        }
+          // Allow interaction when very close (within collision distance + small buffer)
+          if (distSq <= minDistSq * 1.2) {
+            shopkeeper.dialogue = 'Hello!';
+            shopkeeper.dialogueStage = 1;
+            shopkeeper.dialogueTimer = 0; // Don't auto-close, wait for Spacebar press
+            // Kill momentum when opening dialogue
+            player.vx = 0;
+            player.vy = 0;
+            return;
+          }
 
           // Check if player is on a tile (any tile triggers crouch animation)
-        const col = Math.floor(player.x / tileSize);
-        const row = Math.floor(player.y / tileSize);
+          const col = Math.floor(player.x / tileSize);
+          const row = Math.floor(player.y / tileSize);
 
-        if (row >= 0 && row < tileRows && col >= 0 && col < tileCols) {
-          const tile = tileMap[row][col];
+          if (row >= 0 && row < tileRows && col >= 0 && col < tileCols) {
+            const tile = tileMap[row][col];
             if (tile) {
               // Start crouch animation on any tile (prevents spamming)
               if (!crouchAnimation.active) {
@@ -1444,13 +1568,14 @@
                 // Only store minigame if on red X or secret X tile, otherwise just play animation
                 if (tile.name === 'redX' || tile.name === 'secretX') {
                   // Store which minigame to start after animation
+                  // Probabilities: 35% balancing (pots), 35% declaration (typo), 30% brushing
                   const minigameRoll = Math.random();
-                  if (minigameRoll < 0.333) {
+                  if (minigameRoll < 0.35) {
                     crouchAnimation.pendingMinigame = 'balancing';
-                  } else if (minigameRoll < 0.666) {
-                    crouchAnimation.pendingMinigame = 'brushing';
-                  } else {
+                  } else if (minigameRoll < 0.7) {
                     crouchAnimation.pendingMinigame = 'declaration';
+                  } else {
+                    crouchAnimation.pendingMinigame = 'brushing';
                   }
                   // Store whether this is a secret X tile for later reward multiplier
                   crouchAnimation.isSecretX = tile.name === 'secretX';
@@ -1475,19 +1600,22 @@
 
           if (crouchAnimation.pendingMinigame === 'balancing') {
             // Start Balancing minigame
-              balancingMinigame.active = true;
+            balancingMinigame.active = true;
             balancingMinigame.tileRow = row;
             balancingMinigame.tileCol = col;
             balancingMinigame.isSecretX = crouchAnimation.isSecretX;
-              balancingMinigame.potAngle = 0;
+            balancingMinigame.potAngle = 0;
             balancingMinigame.potAngularVelocity = 0;
-              balancingMinigame.timeRemaining = 15;
+            balancingMinigame.timeRemaining = 15;
             balancingMinigame.breaking = false;
             balancingMinigame.breakTimer = 0;
             balancingMinigame.pieces = [];
-            // Initialize stick position to center of screen
-              balancingMinigame.stickX = canvas.width / 2;
-            balancingMinigame.stickY = canvas.height / 2;
+            // Initialize stick position to center of screen (lowered down)
+            // Ensure canvas dimensions are valid
+            const centerX = canvas && canvas.width ? canvas.width / 2 : 400;
+            const centerY = canvas && canvas.height ? canvas.height / 2 : 300;
+            balancingMinigame.stickX = centerX;
+            balancingMinigame.stickY = centerY; // Will be lowered by 40px in render
             // Randomly select pot type (equal chance for each)
             const potTypeRoll = Math.random();
             if (potTypeRoll < 0.333) {
@@ -1497,11 +1625,18 @@
             } else {
               balancingMinigame.potType = 'short';
             }
+            // Ensure potAngle and other values are initialized
+            if (balancingMinigame.potAngle === undefined) {
+              balancingMinigame.potAngle = 0;
+            }
+            if (balancingMinigame.potAngularVelocity === undefined) {
+              balancingMinigame.potAngularVelocity = 0;
+            }
           } else if (crouchAnimation.pendingMinigame === 'brushing') {
             // Start Brushing minigame
-              brushingMinigame.active = true;
-              brushingMinigame.tileRow = row;
-              brushingMinigame.tileCol = col;
+            brushingMinigame.active = true;
+            brushingMinigame.tileRow = row;
+            brushingMinigame.tileCol = col;
             brushingMinigame.isSecretX = crouchAnimation.isSecretX;
             brushingMinigame.dirtLevel = 1.0;
             brushingMinigame.redness = 0;
@@ -1509,8 +1644,8 @@
             brushingMinigame.redTriggerTime = 3 + Math.random() * 5;
             brushingMinigame.timeSinceRed = 0;
             brushingMinigame.particles = [];
-              brushingMinigame.completed = false;
-              brushingMinigame.broken = false;
+            brushingMinigame.completed = false;
+            brushingMinigame.broken = false;
             // Initialize brush position to center of screen (slightly above dirt)
             brushingMinigame.brushX = canvas.width / 2;
             brushingMinigame.brushY = canvas.height / 2 - 40; // Slightly above center
@@ -1555,16 +1690,16 @@
           crouchAnimation.active = false;
           crouchAnimation.timer = 0;
           crouchAnimation.pendingMinigame = null;
-      }
+        }
 
-      function updateBalancingMinigame(dtMs) {
-        if (!balancingMinigame.active) return;
+        function updateBalancingMinigame(dtMs) {
+          if (!balancingMinigame.active) return;
 
-        const dt = dtMs / 1000; // Convert to seconds
+          const dt = dtMs / 1000; // Convert to seconds
 
-        // Player input affects angular velocity
-        const leftInput = pressed('ArrowLeft') || pressed('KeyA');
-        const rightInput = pressed('ArrowRight') || pressed('KeyD');
+          // Player input affects angular velocity
+          const leftInput = pressed('ArrowLeft') || pressed('KeyA');
+          const rightInput = pressed('ArrowRight') || pressed('KeyD');
 
           // Get pot type modifiers
           // Tall pot: more susceptible to gravity and balancing (harder)
@@ -1584,103 +1719,105 @@
             teeteringMultiplier = 0.7; // 30% less teetering
           }
 
-        if (leftInput && !rightInput) {
+          if (leftInput && !rightInput) {
             balancingMinigame.potAngularVelocity -= 0.2 * dt * inputMultiplier; // Lean left
-        } else if (rightInput && !leftInput) {
+          } else if (rightInput && !leftInput) {
             balancingMinigame.potAngularVelocity += 0.2 * dt * inputMultiplier; // Lean right
-        }
+          }
 
-        // Natural physics: pot wants to fall (very strong teetering force)
+          // Natural physics: pot wants to fall (very strong teetering force)
           const baseGravity = 0.6; // How fast it wants to fall (very strong - requires constant input)
           const gravity = baseGravity * gravityMultiplier;
-        const damping = 0.985; // Less friction to allow stronger movement
+          const damping = 0.985; // Less friction to allow stronger movement
 
-        // Apply gravity based on current angle (very strong)
+          // Apply gravity based on current angle (very strong)
           balancingMinigame.potAngularVelocity +=
             Math.sin(balancingMinigame.potAngle) * gravity * dt;
 
-        // Add constant teetering force to make it much harder
+          // Add constant teetering force to make it much harder
           balancingMinigame.potAngularVelocity +=
             Math.sin(balancingMinigame.potAngle * 2) *
             0.18 *
             dt *
             teeteringMultiplier;
 
-        // Add additional random-like teetering force
+          // Add additional random-like teetering force
           balancingMinigame.potAngularVelocity +=
             Math.sin(balancingMinigame.potAngle * 3 + Date.now() * 0.001) *
             0.12 *
             dt *
             teeteringMultiplier;
 
-        // Apply damping
-        balancingMinigame.potAngularVelocity *= Math.pow(damping, dt * 60); // Normalize to 60fps
+          // Apply damping
+          balancingMinigame.potAngularVelocity *= Math.pow(damping, dt * 60); // Normalize to 60fps
 
-        // Update angle
+          // Update angle
           balancingMinigame.potAngle +=
             balancingMinigame.potAngularVelocity * dt;
 
-        // Check if pot fell off (angle too extreme - make it easier to lose)
-        const maxAngle = Math.PI / 4.5; // About 40 degrees (easier to lose)
+          // Check if pot fell off (angle too extreme - make it easier to lose)
+          const maxAngle = Math.PI / 4.5; // About 40 degrees (easier to lose)
           if (
             Math.abs(balancingMinigame.potAngle) > maxAngle &&
             !balancingMinigame.breaking
           ) {
-          // Start breaking animation
-          balancingMinigame.breaking = true;
-          balancingMinigame.breakTimer = 0.5; // 0.5 seconds of breaking animation
+            // Start breaking animation
+            balancingMinigame.breaking = true;
+            balancingMinigame.breakTimer = 0.5; // 0.5 seconds of breaking animation
 
-          // Create pot pieces flying off
-          const potSize = 100;
-          const stickX = balancingMinigame.stickX;
-          const stickTipY = balancingMinigame.stickY - 25;
+            // Create pot pieces flying off
+            const potSize = 100;
+            const stickX = balancingMinigame.stickX;
+            const stickTipY = balancingMinigame.stickY - 25;
             const potContactY = stickTipY + 30; // Match the pot position from drawing code
-          const potCenterX = stickX;
-          const potCenterY = potContactY - potSize / 2;
+            const potCenterX = stickX;
+            const potCenterY = potContactY - potSize / 2;
 
-          // Create 8-12 pieces
-          const numPieces = 10;
-          balancingMinigame.pieces = [];
-          for (let i = 0; i < numPieces; i++) {
+            // Create 8-12 pieces
+            const numPieces = 10;
+            balancingMinigame.pieces = [];
+            for (let i = 0; i < numPieces; i++) {
               const angle =
                 (Math.PI * 2 * i) / numPieces + balancingMinigame.potAngle;
-            const speed = 2 + Math.random() * 3;
-            balancingMinigame.pieces.push({
-              x: potCenterX,
-              y: potCenterY,
-              vx: Math.cos(angle) * speed,
-              vy: Math.sin(angle) * speed - 1, // Slight upward bias
-              rotation: Math.random() * Math.PI * 2,
-              rotationSpeed: (Math.random() - 0.5) * 0.3,
-              size: 8 + Math.random() * 12,
+              const speed = 2 + Math.random() * 3;
+              balancingMinigame.pieces.push({
+                x: potCenterX,
+                y: potCenterY,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 1, // Slight upward bias
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.3,
+                size: 8 + Math.random() * 12,
                 opacity: 1.0,
-            });
-          }
-        }
-
-        // Update breaking animation
-        if (balancingMinigame.breaking) {
-          balancingMinigame.breakTimer -= dt;
-
-          // Update pieces
-          for (let i = 0; i < balancingMinigame.pieces.length; i++) {
-            const piece = balancingMinigame.pieces[i];
-            piece.x += piece.vx * dt * 60;
-            piece.y += piece.vy * dt * 60;
-            piece.vy += 0.5 * dt * 60; // Gravity
-            piece.rotation += piece.rotationSpeed * dt * 60;
-            piece.opacity -= dt * 2; // Fade out
+              });
+            }
           }
 
-          // End minigame after breaking animation
-          if (balancingMinigame.breakTimer <= 0) {
+          // Update breaking animation
+          if (balancingMinigame.breaking) {
+            balancingMinigame.breakTimer -= dt;
+
+            // Update pieces
+            for (let i = 0; i < balancingMinigame.pieces.length; i++) {
+              const piece = balancingMinigame.pieces[i];
+              piece.x += piece.vx * dt * 60;
+              piece.y += piece.vy * dt * 60;
+              piece.vy += 0.5 * dt * 60; // Gravity
+              piece.rotation += piece.rotationSpeed * dt * 60;
+              piece.opacity -= dt * 2; // Fade out
+            }
+
+            // End minigame after breaking animation
+            if (balancingMinigame.breakTimer <= 0) {
               // Failed - give base reward with shovel multiplier and secret X multiplier
-            let multiplier = 1.0;
-            if (inventory.equipment) {
+              let multiplier = 1.0;
+              if (inventory.equipment) {
                 if (inventory.equipment.tier === 1)
                   multiplier = 1.5; // Simple shovel
-              else if (inventory.equipment.tier === 2) multiplier = 2.0; // Iron shovel
-            }
+                else if (inventory.equipment.tier === 2)
+                  multiplier = 2.0; // Iron shovel
+                else if (inventory.equipment.tier === 3) multiplier = 2.5; // Steel shovel
+              }
               // Apply 1.5x multiplier for secret X tiles
               if (balancingMinigame.isSecretX) {
                 multiplier *= 1.5;
@@ -1698,29 +1835,31 @@
               ) {
                 tileMap[balancingMinigame.tileRow][balancingMinigame.tileCol] =
                   {
-                name: grassDef.name,
+                    name: grassDef.name,
                     canvas: createTileCanvas(grassDef.draw),
-              };
+                  };
+              }
+              balancingMinigame.active = false;
+              balancingMinigame.breaking = false;
+              balancingMinigame.pieces = [];
+              return;
             }
-            balancingMinigame.active = false;
-            balancingMinigame.breaking = false;
-            balancingMinigame.pieces = [];
-            return;
           }
-        }
 
-        // Update timer
-        balancingMinigame.timeRemaining -= dt;
+          // Update timer
+          balancingMinigame.timeRemaining -= dt;
 
-        // Check if succeeded (15 seconds passed)
-        if (balancingMinigame.timeRemaining <= 0) {
+          // Check if succeeded (15 seconds passed)
+          if (balancingMinigame.timeRemaining <= 0) {
             // Success - give 3x reward with shovel multiplier and secret X multiplier
-          let multiplier = 3.0; // Base success multiplier (3x)
-          if (inventory.equipment) {
+            let multiplier = 3.0; // Base success multiplier (3x)
+            if (inventory.equipment) {
               if (inventory.equipment.tier === 1)
                 multiplier = 4.5; // Simple shovel: 1.5x * 3 = 4.5x
-            else if (inventory.equipment.tier === 2) multiplier = 6.0; // Iron shovel: 2x * 3 = 6x
-          }
+              else if (inventory.equipment.tier === 2)
+                multiplier = 6.0; // Iron shovel: 2x * 3 = 6x
+              else if (inventory.equipment.tier === 3) multiplier = 7.5; // Steel shovel: 2.5x * 3 = 7.5x
+            }
             // Apply 1.5x multiplier for secret X tiles
             if (balancingMinigame.isSecretX) {
               multiplier *= 1.5;
@@ -1736,71 +1875,71 @@
               balancingMinigame.tileRow !== null &&
               balancingMinigame.tileCol !== null
             ) {
-            tileMap[balancingMinigame.tileRow][balancingMinigame.tileCol] = {
-              name: grassDef.name,
+              tileMap[balancingMinigame.tileRow][balancingMinigame.tileCol] = {
+                name: grassDef.name,
                 canvas: createTileCanvas(grassDef.draw),
-            };
+              };
+            }
+            balancingMinigame.active = false;
           }
-          balancingMinigame.active = false;
         }
-      }
 
-      function updateBrushingMinigame(dtMs) {
-        if (!brushingMinigame.active) return;
+        function updateBrushingMinigame(dtMs) {
+          if (!brushingMinigame.active) return;
 
-        const dt = dtMs / 1000; // Convert to seconds
-        const spacePressed = pressed('Space');
+          const dt = dtMs / 1000; // Convert to seconds
+          const spacePressed = pressed('Space');
 
-        // Animate brush back and forth when spacebar is held
-        if (spacePressed) {
-          // Track time holding space
-          brushingMinigame.timeHoldingSpace += dt;
+          // Animate brush back and forth when spacebar is held
+          if (spacePressed) {
+            // Track time holding space
+            brushingMinigame.timeHoldingSpace += dt;
 
-          // Animate brush moving back and forth across the dirt
-          const brushSpeed = 100; // pixels per second
+            // Animate brush moving back and forth across the dirt
+            const brushSpeed = 100; // pixels per second
             brushingMinigame.brushOffset +=
               brushSpeed * dt * brushingMinigame.brushDirection;
 
-          // Reverse direction when reaching edges (60 pixels from center)
-          const maxOffset = 60;
-          if (brushingMinigame.brushOffset >= maxOffset) {
-            brushingMinigame.brushOffset = maxOffset;
-            brushingMinigame.brushDirection = -1; // Move left
-          } else if (brushingMinigame.brushOffset <= -maxOffset) {
-            brushingMinigame.brushOffset = -maxOffset;
-            brushingMinigame.brushDirection = 1; // Move right
-          }
+            // Reverse direction when reaching edges (60 pixels from center)
+            const maxOffset = 60;
+            if (brushingMinigame.brushOffset >= maxOffset) {
+              brushingMinigame.brushOffset = maxOffset;
+              brushingMinigame.brushDirection = -1; // Move left
+            } else if (brushingMinigame.brushOffset <= -maxOffset) {
+              brushingMinigame.brushOffset = -maxOffset;
+              brushingMinigame.brushDirection = 1; // Move right
+            }
 
-          // Spawn dirt particles while brushing (only if there's still dirt)
-          if (brushingMinigame.dirtLevel > 0 && Math.random() < 0.3) {
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            brushingMinigame.particles.push({
+            // Spawn dirt particles while brushing (only if there's still dirt)
+            if (brushingMinigame.dirtLevel > 0 && Math.random() < 0.3) {
+              const centerX = canvas.width / 2;
+              const centerY = canvas.height / 2;
+              brushingMinigame.particles.push({
                 x:
                   centerX +
                   brushingMinigame.brushOffset +
                   (Math.random() - 0.5) * 30,
-              y: centerY + (Math.random() - 0.5) * 30,
+                y: centerY + (Math.random() - 0.5) * 30,
                 vx:
                   (Math.random() - 0.5) * 100 +
                   brushingMinigame.brushDirection * 30,
-              vy: (Math.random() - 0.5) * 100 - 30, // Fly upward
-              life: 1.0, // 0 = dead, 1.0 = fresh
+                vy: (Math.random() - 0.5) * 100 - 30, // Fly upward
+                life: 1.0, // 0 = dead, 1.0 = fresh
                 size: Math.random() * 3 + 2,
-            });
-          }
+              });
+            }
 
-          // Brushing reduces dirt level (makes it cleaner)
-          brushingMinigame.dirtLevel -= 0.2 * dt;
+            // Brushing reduces dirt level (makes it cleaner)
+            brushingMinigame.dirtLevel -= 0.2 * dt;
             brushingMinigame.dirtLevel = Math.max(
               0,
               brushingMinigame.dirtLevel
             );
 
-          // After at least 5 seconds, dirt is cleaned
-          if (brushingMinigame.timeHoldingSpace >= 5.0) {
-            // Dirt is now clean
-            brushingMinigame.dirtLevel = 0;
+            // After at least 5 seconds, dirt is cleaned
+            if (brushingMinigame.timeHoldingSpace >= 5.0) {
+              // Dirt is now clean
+              brushingMinigame.dirtLevel = 0;
 
               // After the random trigger time (3-8 seconds), start red gradient transition
               if (
@@ -1808,96 +1947,98 @@
                   brushingMinigame.redTriggerTime &&
                 brushingMinigame.redness < 1.0
               ) {
-              // Gradually increase redness over 1 second
+                // Gradually increase redness over 1 second
                 brushingMinigame.redness +=
                   dt / brushingMinigame.redTransitionTime;
                 brushingMinigame.redness = Math.min(
                   1.0,
                   brushingMinigame.redness
                 );
-            }
+              }
 
-            // Track time since turning red (only after fully red)
-            if (brushingMinigame.redness >= 1.0) {
-              brushingMinigame.timeSinceRed += dt;
+              // Track time since turning red (only after fully red)
+              if (brushingMinigame.redness >= 1.0) {
+                brushingMinigame.timeSinceRed += dt;
 
-              // If holding space too long after fully red, you break it (lose)
+                // If holding space too long after fully red, you break it (lose)
                 if (
                   brushingMinigame.timeSinceRed >
                     brushingMinigame.perfectReleaseWindow &&
                   !brushingMinigame.broken
                 ) {
-                brushingMinigame.broken = true;
+                  brushingMinigame.broken = true;
+                }
               }
             }
-          }
-        } else {
-          // When not brushing, reset time counter
-          brushingMinigame.timeHoldingSpace = 0;
+          } else {
+            // When not brushing, reset time counter
+            brushingMinigame.timeHoldingSpace = 0;
 
-          // Reset brush position to center when not holding space
-          brushingMinigame.brushOffset = 0;
-          brushingMinigame.brushDirection = 1;
+            // Reset brush position to center when not holding space
+            brushingMinigame.brushOffset = 0;
+            brushingMinigame.brushDirection = 1;
 
-          // If dirt is clean and red, releasing in the perfect window = success!
+            // If dirt is clean and red, releasing in the perfect window = success!
             if (
               brushingMinigame.dirtLevel <= 0 &&
               brushingMinigame.redness > 0 &&
               !brushingMinigame.completed &&
               !brushingMinigame.broken
             ) {
-            // Check if released within the perfect timing window
+              // Check if released within the perfect timing window
               if (
                 brushingMinigame.timeSinceRed <=
                 brushingMinigame.perfectReleaseWindow
               ) {
-              brushingMinigame.completed = true; // PERFECT! Maximum reward
-            } else {
-              brushingMinigame.broken = true; // Missed the window, failed
+                brushingMinigame.completed = true; // PERFECT! Maximum reward
+              } else {
+                brushingMinigame.broken = true; // Missed the window, failed
+              }
             }
-          }
 
-          // Reset redness when not brushing (dirt returns to normal)
-          brushingMinigame.redness = 0;
-          brushingMinigame.timeSinceRed = 0;
+            // Reset redness when not brushing (dirt returns to normal)
+            brushingMinigame.redness = 0;
+            brushingMinigame.timeSinceRed = 0;
 
-          // Dirt slowly returns if not fully cleaned
+            // Dirt slowly returns if not fully cleaned
             if (
               brushingMinigame.dirtLevel < 1.0 &&
               !brushingMinigame.completed &&
               !brushingMinigame.broken
             ) {
-            brushingMinigame.dirtLevel += 0.15 * dt;
+              brushingMinigame.dirtLevel += 0.15 * dt;
               brushingMinigame.dirtLevel = Math.min(
                 1.0,
                 brushingMinigame.dirtLevel
               );
+            }
           }
-        }
 
-        // Update particles
-        for (let i = brushingMinigame.particles.length - 1; i >= 0; i--) {
-          const p = brushingMinigame.particles[i];
-          p.x += p.vx * dt;
-          p.y += p.vy * dt;
-          p.vy += 100 * dt; // Gravity
-          p.life -= dt * 2; // Fade out over 0.5 seconds
+          // Update particles
+          for (let i = brushingMinigame.particles.length - 1; i >= 0; i--) {
+            const p = brushingMinigame.particles[i];
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.vy += 100 * dt; // Gravity
+            p.life -= dt * 2; // Fade out over 0.5 seconds
 
-          // Remove dead particles
-          if (p.life <= 0) {
-            brushingMinigame.particles.splice(i, 1);
+            // Remove dead particles
+            if (p.life <= 0) {
+              brushingMinigame.particles.splice(i, 1);
+            }
           }
-        }
 
-        // End minigame if completed or broken
-        if (brushingMinigame.completed || brushingMinigame.broken) {
-          // Give reward based on performance
-          let multiplier = brushingMinigame.completed ? 3.0 : 1.0; // 3x for perfect timing, 1x for failure
-          if (inventory.equipment) {
+          // End minigame if completed or broken
+          if (brushingMinigame.completed || brushingMinigame.broken) {
+            // Give reward based on performance
+            let multiplier = brushingMinigame.completed ? 3.0 : 1.0; // 3x for perfect timing, 1x for failure
+            if (inventory.equipment) {
               if (inventory.equipment.tier === 1)
                 multiplier *= 1.5; // Simple shovel
-            else if (inventory.equipment.tier === 2) multiplier *= 2.0; // Iron shovel
-          }
+              else if (inventory.equipment.tier === 2)
+                multiplier *= 2.0; // Iron shovel
+              else if (inventory.equipment.tier === 3) multiplier *= 2.5; // Steel shovel
+            }
             // Apply 1.5x multiplier for secret X tiles
             if (brushingMinigame.isSecretX) {
               multiplier *= 1.5;
@@ -1906,7 +2047,7 @@
               brushingMinigame.baseReward * multiplier
             );
 
-          // Convert tile to grass
+            // Convert tile to grass
             const grassDef = tileDefinitions.find(
               (def) => def.name === 'grass'
             );
@@ -1915,15 +2056,15 @@
               brushingMinigame.tileRow !== null &&
               brushingMinigame.tileCol !== null
             ) {
-            tileMap[brushingMinigame.tileRow][brushingMinigame.tileCol] = {
-              name: grassDef.name,
+              tileMap[brushingMinigame.tileRow][brushingMinigame.tileCol] = {
+                name: grassDef.name,
                 canvas: createTileCanvas(grassDef.draw),
-            };
-          }
+              };
+            }
 
-          brushingMinigame.active = false;
+            brushingMinigame.active = false;
+          }
         }
-      }
 
         // Handle player's answer in Declaration minigame
         function handleDeclarationAnswer(playerSaidReal) {
@@ -2010,12 +2151,124 @@
           // Minigame logic is handled by key presses, no continuous updates needed
         }
 
-      const treeSprite = (() => {
-        const canvasEl = document.createElement('canvas');
-        canvasEl.width = tileCell * 8;
-        canvasEl.height = tileCell * 8;
-        const c = canvasEl.getContext('2d');
-        const treeLayout = [
+        function updateRadar(dtMs) {
+          if (!radar.active) return;
+
+          const dt = dtMs / 1000; // Convert to seconds
+
+          // Calculate player's movement direction
+          const playerSpeed = Math.hypot(player.vx, player.vy);
+          if (playerSpeed > 0.1) {
+            // Player is moving - use velocity direction
+            radar.lastDirection.x = player.vx / playerSpeed;
+            radar.lastDirection.y = player.vy / playerSpeed;
+          }
+
+          // Radar follows behind player (much closer)
+          const followDistance = 15; // Much closer follow distance
+          radar.x = player.x - radar.lastDirection.x * followDistance;
+          radar.y = player.y - radar.lastDirection.y * followDistance;
+
+          // Update ring timer
+          radar.ringTimer += dt;
+
+          // Spawn new ring every 2.5-4 seconds (twice as common)
+          const minInterval = 2.5;
+          const maxInterval = 4.0;
+          if (radar.ringTimer >= minInterval) {
+            // Random interval between 2.5-4 seconds
+            const randomInterval =
+              minInterval + Math.random() * (maxInterval - minInterval);
+            if (radar.ringTimer >= randomInterval) {
+              // Spawn a new ring in a random direction from radar position
+              const angle = Math.random() * Math.PI * 2;
+              const speed = 150; // pixels per second
+              radar.rings.push({
+                x: radar.x,
+                y: radar.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1.0, // Fade out over time
+                maxLife: 3.0, // Ring lasts 3 seconds
+                foundSecretX: false, // Whether this ring found a secret X
+                secretXPos: null, // Position of found secret X
+              });
+              radar.ringTimer = 0; // Reset timer
+            }
+          }
+
+          // Update existing rings
+          for (let i = radar.rings.length - 1; i >= 0; i--) {
+            const ring = radar.rings[i];
+
+            if (ring.foundSecretX) {
+              // Ring is returning to player
+              const dx = radar.x - ring.x;
+              const dy = radar.y - ring.y;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              const speed = 200; // Return speed
+
+              if (dist < 10) {
+                // Reached player - remove ring
+                radar.rings.splice(i, 1);
+                continue;
+              }
+
+              // Move towards player
+              const invDist = 1 / dist;
+              ring.vx = dx * invDist * speed;
+              ring.vy = dy * invDist * speed;
+            } else {
+              // Check collision with secret X tiles
+              const ringCol = Math.floor(ring.x / tileSize);
+              const ringRow = Math.floor(ring.y / tileSize);
+
+              if (
+                ringRow >= 0 &&
+                ringRow < tileRows &&
+                ringCol >= 0 &&
+                ringCol < tileCols
+              ) {
+                const tile = tileMap[ringRow][ringCol];
+                if (tile && tile.name === 'secretX') {
+                  // Found a secret X! Make ring return to player
+                  ring.foundSecretX = true;
+                  ring.secretXPos = { x: ring.x, y: ring.y };
+
+                  // Mark this secret X as discovered (avoid duplicates)
+                  const alreadyDiscovered = radar.discoveredSecretX.some(
+                    (pos) => pos.row === ringRow && pos.col === ringCol
+                  );
+                  if (!alreadyDiscovered) {
+                    radar.discoveredSecretX.push({
+                      row: ringRow,
+                      col: ringCol,
+                    });
+                  }
+                }
+              }
+            }
+
+            // Update ring position
+            ring.x += ring.vx * dt;
+            ring.y += ring.vy * dt;
+
+            // Update ring life
+            ring.life -= dt / ring.maxLife;
+
+            // Remove dead rings
+            if (ring.life <= 0) {
+              radar.rings.splice(i, 1);
+            }
+          }
+        }
+
+        const treeSprite = (() => {
+          const canvasEl = document.createElement('canvas');
+          canvasEl.width = tileCell * 8;
+          canvasEl.height = tileCell * 8;
+          const c = canvasEl.getContext('2d');
+          const treeLayout = [
             { x: 1, y: 0, color: '#0a3c0f' },
             { x: 2, y: 0, color: '#0a3c0f' },
             { x: 3, y: 0, color: '#0a3c0f' },
@@ -2060,63 +2313,84 @@
             { x: 2, y: 7, color: '#0a3c0f' },
             { x: 3, y: 7, color: '#063310' },
             { x: 4, y: 7, color: '#0a3c0f' },
-        ];
-        treeLayout.forEach(({ x, y, color }) => fillCell(c, x, y, color));
-        return canvasEl;
-      })();
+          ];
+          treeLayout.forEach(({ x, y, color }) => fillCell(c, x, y, color));
+          return canvasEl;
+        })();
 
-      // Load shovel sprites from PNG images
-      const shovelSprites = {};
-      function loadShovelSprite(tier, filename) {
-        const sprite = new Image();
-        sprite.src = filename;
-        sprite.imageSmoothingEnabled = false; // Pixelated rendering
-        shovelSprites[tier] = sprite;
-        return sprite;
-      }
+        // Load shovel sprites from PNG images
+        const shovelSprites = {};
+        function loadShovelSprite(tier, filename) {
+          const sprite = new Image();
+          sprite.src = filename;
+          sprite.imageSmoothingEnabled = false; // Pixelated rendering
+          shovelSprites[tier] = sprite;
+          return sprite;
+        }
 
-      // Load shovel sprites for each tier
-      loadShovelSprite(1, 'assets/sprites/shovel.png'); // Simple shovel
-      loadShovelSprite(2, 'assets/sprites/iron-shovel.png'); // Iron Shovel
-      // Add more shovel sprites as needed for other tiers
+        // Load shovel sprites for each tier
+        loadShovelSprite(1, 'assets/sprites/shovel.png'); // Simple shovel
+        loadShovelSprite(2, 'assets/sprites/iron-shovel.png'); // Iron Shovel
+        loadShovelSprite(3, 'assets/sprites/steel-shovel.png'); // Steel Shovel
+        // Add more shovel sprites as needed for other tiers
 
-      function drawFlora() {
-        // Viewport culling: only draw trees visible on screen
-        const halfCanvasW = canvas.width / 2;
-        const halfCanvasH = canvas.height / 2;
-        const viewLeft = camera.x - halfCanvasW;
-        const viewTop = camera.y - halfCanvasH;
-        const viewRight = camera.x + halfCanvasW;
-        const viewBottom = camera.y + halfCanvasH;
-        const padding = 120; // Extra padding to account for tree size
-        const spriteHalfW = treeSprite.width / 2;
-        const spriteHalfH = treeSprite.height / 2;
-        const tileCell8 = tileCell * 8;
+        // Load radar sprites (optimized: set imageSmoothingEnabled before src)
+        const radarSprite = new Image();
+        radarSprite.imageSmoothingEnabled = false;
+        radarSprite.src = 'assets/sprites/Radar.png';
 
-        ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Set once outside loop
+        const radarRingSprite = new Image();
+        radarRingSprite.imageSmoothingEnabled = false;
+        radarRingSprite.src = 'assets/sprites/Radar_Ring.png';
 
-        for (let i = 0; i < flora.trees.length; i++) {
-          const tree = flora.trees[i];
-          const halfSize = tree.size / 2;
+        // Radar system
+        const radar = {
+          active: false, // Whether player owns radar
+          x: 0, // Position (follows behind player)
+          y: 0,
+          ringTimer: 0, // Timer for next ring
+          rings: [], // Active radar rings
+          discoveredSecretX: [], // Array of discovered secret X positions {row, col}
+          lastDirection: { x: 0, y: -1 }, // Last movement direction (default: up)
+        };
 
-          // Skip trees outside viewport (optimized bounds check)
+        function drawFlora() {
+          // Viewport culling: only draw trees visible on screen
+          const halfCanvasW = canvas.width / 2;
+          const halfCanvasH = canvas.height / 2;
+          const viewLeft = camera.x - halfCanvasW;
+          const viewTop = camera.y - halfCanvasH;
+          const viewRight = camera.x + halfCanvasW;
+          const viewBottom = camera.y + halfCanvasH;
+          const padding = 120; // Extra padding to account for tree size
+          const spriteHalfW = treeSprite.width / 2;
+          const spriteHalfH = treeSprite.height / 2;
+          const tileCell8 = tileCell * 8;
+
+          ctx.save();
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'; // Set once outside loop
+
+          for (let i = 0; i < flora.trees.length; i++) {
+            const tree = flora.trees[i];
+            const halfSize = tree.size / 2;
+
+            // Skip trees outside viewport (optimized bounds check)
             if (
               tree.x + halfSize < viewLeft - padding ||
               tree.x - halfSize > viewRight + padding ||
               tree.y + halfSize < viewTop - padding ||
               tree.y - halfSize > viewBottom + padding
             ) {
-            continue;
-          }
+              continue;
+            }
 
-          ctx.save();
-          ctx.translate(Math.round(tree.x) + 0.5, Math.round(tree.y) + 0.5);
-          ctx.rotate(tree.rotation);
+            ctx.save();
+            ctx.translate(Math.round(tree.x) + 0.5, Math.round(tree.y) + 0.5);
+            ctx.rotate(tree.rotation);
 
-          // Draw shadow
-          const shadowRadius = tree.size * 0.45;
-          ctx.beginPath();
+            // Draw shadow
+            const shadowRadius = tree.size * 0.45;
+            ctx.beginPath();
             ctx.ellipse(
               0,
               tree.size * 0.4,
@@ -2126,29 +2400,29 @@
               0,
               Math.PI * 2
             );
-          ctx.fill();
+            ctx.fill();
 
-          // Draw tree
-          const scale = tree.size / tileCell8;
-          ctx.scale(scale, scale);
-          ctx.drawImage(treeSprite, -spriteHalfW, -spriteHalfH);
+            // Draw tree
+            const scale = tree.size / tileCell8;
+            ctx.scale(scale, scale);
+            ctx.drawImage(treeSprite, -spriteHalfW, -spriteHalfH);
+            ctx.restore();
+          }
+
           ctx.restore();
         }
 
-        ctx.restore();
-      }
+        function drawShopkeeper() {
+          ctx.save();
 
-      function drawShopkeeper() {
-        ctx.save();
+          // Draw shopkeeper sprite
+          if (shopkeeperSprite.complete && shopkeeperSprite.naturalWidth > 0) {
+            const spriteWidth = 43; // Match player size
+            const spriteHeight = 43;
 
-        // Draw shopkeeper sprite
-        if (shopkeeperSprite.complete && shopkeeperSprite.naturalWidth > 0) {
-          const spriteWidth = 43; // Match player size
-          const spriteHeight = 43;
-
-          // Shopkeeper shadow
-          ctx.fillStyle = 'rgba(0,0,0,0.25)';
-          ctx.beginPath();
+            // Shopkeeper shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.beginPath();
             ctx.ellipse(
               shopkeeper.x,
               shopkeeper.y + spriteHeight * 0.35,
@@ -2158,16 +2432,16 @@
               0,
               Math.PI * 2
             );
-          ctx.fill();
+            ctx.fill();
 
-          const px = Math.round(shopkeeper.x - spriteWidth / 2);
-          const py = Math.round(shopkeeper.y - spriteHeight / 2);
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(shopkeeperSprite, px, py, spriteWidth, spriteHeight);
-        } else {
-          // Fallback while loading
-          ctx.fillStyle = 'rgba(0,0,0,0.25)';
-          ctx.beginPath();
+            const px = Math.round(shopkeeper.x - spriteWidth / 2);
+            const py = Math.round(shopkeeper.y - spriteHeight / 2);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(shopkeeperSprite, px, py, spriteWidth, spriteHeight);
+          } else {
+            // Fallback while loading
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.beginPath();
             ctx.ellipse(
               shopkeeper.x,
               shopkeeper.y + shopkeeper.radius * 0.4,
@@ -2177,12 +2451,12 @@
               0,
               Math.PI * 2
             );
-          ctx.fill();
+            ctx.fill();
 
-          ctx.fillStyle = '#ffd700'; // Yellow/gold color
-          ctx.strokeStyle = '#ffaa00';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
+            ctx.fillStyle = '#ffd700'; // Yellow/gold color
+            ctx.strokeStyle = '#ffaa00';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
             ctx.arc(
               shopkeeper.x,
               shopkeeper.y,
@@ -2190,25 +2464,25 @@
               0,
               Math.PI * 2
             );
-          ctx.fill();
-          ctx.stroke();
+            ctx.fill();
+            ctx.stroke();
+          }
+
+          ctx.restore();
         }
 
-        ctx.restore();
-      }
+        function drawOldGuy() {
+          ctx.save();
 
-      function drawOldGuy() {
-        ctx.save();
+          // Draw old guy sprite
+          if (oldGuySprite.complete && oldGuySprite.naturalWidth > 0) {
+            // Scale to match player size (43x43, 10% bigger than original 39x39)
+            const spriteWidth = 43;
+            const spriteHeight = 43;
 
-        // Draw old guy sprite
-        if (oldGuySprite.complete && oldGuySprite.naturalWidth > 0) {
-          // Scale to match player size (43x43, 10% bigger than original 39x39)
-          const spriteWidth = 43;
-          const spriteHeight = 43;
-
-          // Old guy shadow
-          ctx.fillStyle = 'rgba(0,0,0,0.25)';
-          ctx.beginPath();
+            // Old guy shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.beginPath();
             ctx.ellipse(
               oldGuy.x,
               oldGuy.y + spriteHeight * 0.35,
@@ -2218,40 +2492,86 @@
               0,
               Math.PI * 2
             );
-          ctx.fill();
+            ctx.fill();
 
-          const px = Math.round(oldGuy.x - spriteWidth / 2);
-          const py = Math.round(oldGuy.y - spriteHeight / 2);
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(oldGuySprite, px, py, spriteWidth, spriteHeight);
+            const px = Math.round(oldGuy.x - spriteWidth / 2);
+            const py = Math.round(oldGuy.y - spriteHeight / 2);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(oldGuySprite, px, py, spriteWidth, spriteHeight);
+          }
+
+          ctx.restore();
         }
 
-        ctx.restore();
-      }
+        function drawRadar() {
+          if (!radar.active) return;
 
-      function render() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.save();
+          ctx.imageSmoothingEnabled = false;
 
-        // World space: translate so that camera is centered
-        ctx.save();
+          // Draw radar sprite (follows behind player, same size as player)
+          if (radarSprite.complete && radarSprite.naturalWidth > 0) {
+            const radarSize = player.width; // Same size as player (43x43)
+            const px = Math.round(radar.x - radarSize / 2);
+            const py = Math.round(radar.y - radarSize / 2);
+            ctx.drawImage(radarSprite, px, py, radarSize, radarSize);
+          }
+
+          // Draw radar rings (bigger)
+          if (radarRingSprite.complete && radarRingSprite.naturalWidth > 0) {
+            for (let i = 0; i < radar.rings.length; i++) {
+              const ring = radar.rings[i];
+              const ringSize = 60; // Bigger ring size (doubled from 30)
+              const alpha = ring.life; // Fade out as life decreases
+
+              ctx.globalAlpha = alpha;
+              const px = Math.round(ring.x - ringSize / 2);
+              const py = Math.round(ring.y - ringSize / 2);
+              ctx.drawImage(radarRingSprite, px, py, ringSize, ringSize);
+            }
+            ctx.globalAlpha = 1.0; // Reset alpha
+          }
+
+          // Draw markers for all discovered secret X tiles
+          ctx.fillStyle = '#ffff00'; // Yellow marker
+          for (let i = 0; i < radar.discoveredSecretX.length; i++) {
+            const pos = radar.discoveredSecretX[i];
+            const worldX = (pos.col + 0.5) * tileSize;
+            const worldY = (pos.row + 0.5) * tileSize;
+            ctx.beginPath();
+            ctx.arc(worldX, worldY, 8, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.restore();
+        }
+
+        function render() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // World space: translate so that camera is centered
+          ctx.save();
           ctx.translate(
             Math.round(canvas.width / 2 - camera.x),
             Math.round(canvas.height / 2 - camera.y)
           );
 
-        drawTiles();
-        drawGrid();
-        drawFlora();
+          drawTiles();
+          drawGrid();
+          drawFlora();
 
-        // Shopkeeper NPC
-        drawShopkeeper();
+          // Shopkeeper NPC
+          drawShopkeeper();
 
-        // Old Guy NPC
-        drawOldGuy();
+          // Old Guy NPC
+          drawOldGuy();
 
-        // Player shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.beginPath();
+          // Radar and radar rings
+          drawRadar();
+
+          // Player shadow
+          ctx.fillStyle = 'rgba(0,0,0,0.25)';
+          ctx.beginPath();
           ctx.ellipse(
             player.x,
             player.y + player.height * 0.35,
@@ -2261,12 +2581,12 @@
             0,
             Math.PI * 2
           );
-        ctx.fill();
+          ctx.fill();
 
-        // Player sprite - use back sprite when moving upward, walking sprites when moving
-        const isMoving = Math.hypot(player.vx, player.vy) > 0.1;
-        const isMovingUp = player.vy < -0.1; // Small threshold to prevent flickering
-        let currentSprite;
+          // Player sprite - use back sprite when moving upward, walking sprites when moving
+          const isMoving = Math.hypot(player.vx, player.vy) > 0.1;
+          const isMovingUp = player.vy < -0.1; // Small threshold to prevent flickering
+          let currentSprite;
 
           // Show crouch animation when active (semi-rapidly switches between crouch sprites)
           if (crouchAnimation.active) {
@@ -2275,86 +2595,86 @@
             currentSprite =
               crouchFrame === 0 ? playerSpriteCrouch1 : playerSpriteCrouch2;
           } else if (isMovingUp) {
-          // Alternate between back walk sprites when moving up
-          if (isMoving) {
-            const walkFrame = Math.floor(walkAnimationFrame) % 2;
+            // Alternate between back walk sprites when moving up
+            if (isMoving) {
+              const walkFrame = Math.floor(walkAnimationFrame) % 2;
               currentSprite =
                 walkFrame === 0 ? playerSpriteBackWalk1 : playerSpriteBackWalk2;
-          } else {
-            // Use idle back sprite when not moving but facing up
-            currentSprite = playerSpriteBack;
-          }
-        } else if (isMoving) {
-          // Alternate between walk sprites when moving
-          const walkFrame = Math.floor(walkAnimationFrame) % 2;
+            } else {
+              // Use idle back sprite when not moving but facing up
+              currentSprite = playerSpriteBack;
+            }
+          } else if (isMoving) {
+            // Alternate between walk sprites when moving
+            const walkFrame = Math.floor(walkAnimationFrame) % 2;
             currentSprite =
               walkFrame === 0 ? playerSpriteWalk1 : playerSpriteWalk2;
-        } else {
-          // Use idle sprite when not moving
-          currentSprite = playerSpriteIdle;
-        }
+          } else {
+            // Use idle sprite when not moving
+            currentSprite = playerSpriteIdle;
+          }
 
-        if (currentSprite.complete && currentSprite.naturalWidth > 0) {
-          const px = Math.round(player.x - player.width / 2);
-          const py = Math.round(player.y - player.height / 2);
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(currentSprite, px, py, player.width, player.height);
-        } else {
-          // Fallback while loading
-          ctx.fillStyle = player.color;
-          ctx.strokeStyle = player.outline;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
+          if (currentSprite.complete && currentSprite.naturalWidth > 0) {
+            const px = Math.round(player.x - player.width / 2);
+            const py = Math.round(player.y - player.height / 2);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(currentSprite, px, py, player.width, player.height);
+          } else {
+            // Fallback while loading
+            ctx.fillStyle = player.color;
+            ctx.strokeStyle = player.outline;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
             ctx.rect(
               Math.round(player.x - player.width / 2) + 0.5,
               Math.round(player.y - player.height / 2) + 0.5,
               player.width,
               player.height
             );
-          ctx.fill();
-          ctx.stroke();
-        }
+            ctx.fill();
+            ctx.stroke();
+          }
 
-        // Direction indicator - small black arrow triangle
-        const dirX = player.vx;
-        const dirY = player.vy;
-        const speedSq = dirX * dirX + dirY * dirY;
+          // Direction indicator - small black arrow triangle
+          const dirX = player.vx;
+          const dirY = player.vy;
+          const speedSq = dirX * dirX + dirY * dirY;
           if (speedSq > 0.04) {
             // 0.2^2 = 0.04
-          const speed = Math.sqrt(speedSq);
-          const nx = dirX / speed;
-          const ny = dirY / speed;
+            const speed = Math.sqrt(speedSq);
+            const nx = dirX / speed;
+            const ny = dirY / speed;
 
-          // Position arrow outside player bounds (player radius + offset)
-          const playerRadius = Math.max(player.width, player.height) / 2;
-          const arrowDistance = playerRadius + 12; // Distance from player center
-          const arrowX = player.x + nx * arrowDistance;
-          const arrowY = player.y + ny * arrowDistance;
+            // Position arrow outside player bounds (player radius + offset)
+            const playerRadius = Math.max(player.width, player.height) / 2;
+            const arrowDistance = playerRadius + 12; // Distance from player center
+            const arrowX = player.x + nx * arrowDistance;
+            const arrowY = player.y + ny * arrowDistance;
 
-          // Draw small black triangle arrow
-          const arrowSize = 6; // Size of the arrow
-          const angle = Math.atan2(ny, nx);
+            // Draw small black triangle arrow
+            const arrowSize = 6; // Size of the arrow
+            const angle = Math.atan2(ny, nx);
 
-          ctx.save();
-          ctx.fillStyle = '#000000'; // Black arrow
-          ctx.translate(arrowX, arrowY);
-          ctx.rotate(angle);
-          ctx.beginPath();
-          ctx.moveTo(arrowSize, 0); // Tip of arrow
-          ctx.lineTo(-arrowSize * 0.6, -arrowSize * 0.6); // Bottom left
-          ctx.lineTo(-arrowSize * 0.6, arrowSize * 0.6); // Bottom right
-          ctx.closePath();
-          ctx.fill();
+            ctx.save();
+            ctx.fillStyle = '#000000'; // Black arrow
+            ctx.translate(arrowX, arrowY);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(arrowSize, 0); // Tip of arrow
+            ctx.lineTo(-arrowSize * 0.6, -arrowSize * 0.6); // Bottom left
+            ctx.lineTo(-arrowSize * 0.6, arrowSize * 0.6); // Bottom right
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+          }
+
+          // Optional: draw world bounds
+          ctx.strokeStyle = 'rgba(139,111,71,0.25)'; // Brown world bounds
+          ctx.lineWidth = 2;
+          ctx.strokeRect(0.5, 0.5, world.width - 1, world.height - 1);
+
+          // End world space
           ctx.restore();
-        }
-
-        // Optional: draw world bounds
-        ctx.strokeStyle = 'rgba(139,111,71,0.25)'; // Brown world bounds
-        ctx.lineWidth = 2;
-        ctx.strokeRect(0.5, 0.5, world.width - 1, world.height - 1);
-
-        // End world space
-        ctx.restore();
 
           // Draw crouch animation particles (screen space)
           if (crouchAnimation.active && crouchAnimation.particles.length > 0) {
@@ -2369,60 +2689,60 @@
             ctx.restore();
           }
 
-        // UI: Stamina bar (top-left, screen space)
-        const bar = {
-          x: 16.5,
-          y: 14.5,
-          w: 220,
+          // UI: Stamina bar (top-left, screen space)
+          const bar = {
+            x: 16.5,
+            y: 14.5,
+            w: 220,
             h: 16,
-        };
-        // Background
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'; // White UI borders
-        ctx.fillStyle = 'rgba(10,20,14,0.8)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.rect(bar.x, bar.y, bar.w, bar.h);
-        ctx.fill();
-        ctx.stroke();
+          };
+          // Background
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'; // White UI borders
+          ctx.fillStyle = 'rgba(10,20,14,0.8)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.rect(bar.x, bar.y, bar.w, bar.h);
+          ctx.fill();
+          ctx.stroke();
 
-        // Fill (use cached gradients)
-        if (!staminaBarGradients) initStaminaGradients();
-        const ratio = stamina.current / stamina.max;
-        const fillWidth = Math.round(bar.w * ratio);
+          // Fill (use cached gradients)
+          if (!staminaBarGradients) initStaminaGradients();
+          const ratio = stamina.current / stamina.max;
+          const fillWidth = Math.round(bar.w * ratio);
           ctx.fillStyle = stamina.exhausted
             ? staminaBarGradients.exhausted
             : staminaBarGradients.normal;
-        ctx.beginPath();
-        ctx.rect(bar.x + 1, bar.y + 1, Math.max(0, fillWidth - 2), bar.h - 2);
-        ctx.fill();
+          ctx.beginPath();
+          ctx.rect(bar.x + 1, bar.y + 1, Math.max(0, fillWidth - 2), bar.h - 2);
+          ctx.fill();
 
-        // UI: Money counter (top-right, screen space)
-        ctx.font = 'bold 16px ui-monospace, Menlo, Consolas, monospace';
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'top';
-        const moneyText = `$${money.amount}`;
-        const moneyTextWidth = ctx.measureText(moneyText).width;
-        const moneyX = canvas.width - 16.5;
-        const moneyY = 14.5;
+          // UI: Money counter (top-right, screen space)
+          ctx.font = 'bold 16px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'top';
+          const moneyText = `$${money.amount}`;
+          const moneyTextWidth = ctx.measureText(moneyText).width;
+          const moneyX = canvas.width - 16.5;
+          const moneyY = 14.5;
 
-        // Money border sprite (centered on money text)
+          // Money border sprite (centered on money text)
           if (
             moneyBorderSprite.complete &&
             moneyBorderSprite.naturalWidth > 0
           ) {
-          // Calculate size to fully enclose the text with generous padding
-          const borderPadding = 50; // Increased padding for better centering
-          const borderWidth = moneyTextWidth + borderPadding;
-          const borderHeight = 40; // Increased height to better center around text
+            // Calculate size to fully enclose the text with generous padding
+            const borderPadding = 50; // Increased padding for better centering
+            const borderWidth = moneyTextWidth + borderPadding;
+            const borderHeight = 40; // Increased height to better center around text
 
-          // Center the border on the money text
-          // moneyX is the right edge of the text, so center is at moneyX - moneyTextWidth/2
-          const textCenterX = moneyX - moneyTextWidth / 2;
-          const borderX = textCenterX - borderWidth / 2 - 4; // Moved left by 4 pixels
-          const textCenterY = moneyY + 8; // Approximate center of text vertically
-          const borderY = textCenterY - borderHeight / 2 + 6; // Moved down by 6 pixels (was 4)
+            // Center the border on the money text
+            // moneyX is the right edge of the text, so center is at moneyX - moneyTextWidth/2
+            const textCenterX = moneyX - moneyTextWidth / 2;
+            const borderX = textCenterX - borderWidth / 2 - 4; // Moved left by 4 pixels
+            const textCenterY = moneyY + 8; // Approximate center of text vertically
+            const borderY = textCenterY - borderHeight / 2 + 6; // Moved down by 6 pixels (was 4)
 
-          ctx.imageSmoothingEnabled = false;
+            ctx.imageSmoothingEnabled = false;
             ctx.drawImage(
               moneyBorderSprite,
               borderX,
@@ -2430,78 +2750,84 @@
               borderWidth,
               borderHeight
             );
-        } else {
-          // Fallback while loading
-          ctx.fillStyle = 'rgba(10,20,14,0.8)';
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-          ctx.lineWidth = 1;
-          const moneyPadding = 8;
-          const moneyHeight = 18;
-          ctx.beginPath();
+          } else {
+            // Fallback while loading
+            ctx.fillStyle = 'rgba(10,20,14,0.8)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+            ctx.lineWidth = 1;
+            const moneyPadding = 8;
+            const moneyHeight = 18;
+            ctx.beginPath();
             ctx.rect(
               moneyX - moneyTextWidth - moneyPadding,
               moneyY,
               moneyTextWidth + moneyPadding,
               moneyHeight
             );
-          ctx.fill();
-          ctx.stroke();
-        }
+            ctx.fill();
+            ctx.stroke();
+          }
 
-        // Money text (drawn on top of border, centered vertically)
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(moneyText, moneyX, moneyY + 8);
+          // Money text (drawn on top of border, centered vertically)
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(moneyText, moneyX, moneyY + 8);
 
-        // Draw balancing minigame
-        if (balancingMinigame.active) {
-          ctx.save();
+          // Draw balancing minigame
+          if (balancingMinigame.active) {
+            ctx.save();
 
-          // Background overlay
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Background overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-          // Minigame panel (bigger to fit text)
-          const panelWidth = 450;
-          const panelHeight = 350;
-          const panelX = (canvas.width - panelWidth) / 2;
-          const panelY = (canvas.height - panelHeight) / 2;
+            // Minigame panel (bigger to fit text)
+            const panelWidth = 450;
+            const panelHeight = 350;
+            const panelX = (canvas.width - panelWidth) / 2;
+            const panelY = (canvas.height - panelHeight) / 2;
 
-          ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
-          ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+            ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
+            ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
 
-          ctx.strokeStyle = '#ffffff'; // White menu borders
-          ctx.lineWidth = 3;
-          ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+            ctx.strokeStyle = '#ffffff'; // White menu borders
+            ctx.lineWidth = 3;
+            ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
 
             // Draw pot pole sprite (replaces drawn stick)
-          const stickX = balancingMinigame.stickX;
-            const stickBaseY = balancingMinigame.stickY + 25; // Bottom of stick
-            const stickTipY = balancingMinigame.stickY - 25; // Top of stick (tip)
+            // Ensure stick position is valid (fallback to center if undefined)
+            // Lower the stick position down in the panel
+            const stickX = balancingMinigame.stickX || canvas.width / 2;
+            const stickY = (balancingMinigame.stickY || canvas.height / 2) + 40; // Lower by 40px
+            const stickBaseY = stickY + 25; // Bottom of stick
+            const stickTipY = stickY - 25; // Top of stick (tip)
             const stickHeight = stickBaseY - stickTipY; // Height of stick area
 
             // Draw pole sprite centered at stick position
             if (potPoleSprite.complete && potPoleSprite.naturalWidth > 0) {
               ctx.imageSmoothingEnabled = false;
-              // Draw pole sprite - 2x bigger in all directions
-              const poleWidth = stickHeight * 0.6; // Double width: 30% * 2 = 60% of height
-              const poleHeight = stickHeight * 2; // Double height
-              // Center the larger pole on the original stick position
+              // Maintain aspect ratio but make it bigger
+              // Use the sprite's natural aspect ratio to avoid warping
+              const aspectRatio = potPoleSprite.naturalWidth / potPoleSprite.naturalHeight;
+              const baseHeight = stickHeight * 1.5; // 1.5x bigger (was 2x)
+              const poleHeight = baseHeight;
+              const poleWidth = poleHeight * aspectRatio; // Maintain aspect ratio
+              // Center the pole on the stick position
               const poleX = stickX - poleWidth / 2; // Center horizontally
               const poleY = stickY - poleHeight / 2; // Center vertically on stickY
               ctx.drawImage(potPoleSprite, poleX, poleY, poleWidth, poleHeight);
             } else {
               // Fallback: draw simple stick while sprite loads
-          ctx.strokeStyle = '#8b4513'; // Brown
+              ctx.strokeStyle = '#8b4513'; // Brown
               ctx.lineWidth = 6;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(stickX, stickBaseY);
-          ctx.lineTo(stickX, stickTipY);
-          ctx.stroke();
-          ctx.fillStyle = '#654321'; // Darker brown for tip
-          ctx.beginPath();
-          ctx.arc(stickX, stickTipY, 3, 0, Math.PI * 2);
-          ctx.fill();
+              ctx.lineCap = 'round';
+              ctx.beginPath();
+              ctx.moveTo(stickX, stickBaseY);
+              ctx.lineTo(stickX, stickTipY);
+              ctx.stroke();
+              ctx.fillStyle = '#654321'; // Darker brown for tip
+              ctx.beginPath();
+              ctx.arc(stickX, stickTipY, 3, 0, Math.PI * 2);
+              ctx.fill();
             }
 
             // Draw pot balancing on tip of stick - only if not breaking
@@ -2514,14 +2840,20 @@
             }
 
             // Lower the pot position (move it down to avoid text overlap)
-            const potContactY = stickTipY + 30; // Pot contacts stick lower down
+            const potContactY = stickTipY + 50; // Pot contacts stick even lower (was 30, now 50)
 
-          if (!balancingMinigame.breaking) {
-            ctx.save();
-            // Translate to the contact point (where pot touches stick tip)
-            ctx.translate(stickX, potContactY);
-            // Rotate around the contact point
-            ctx.rotate(balancingMinigame.potAngle);
+            // Ensure potType is set (fallback to 'regular' if undefined)
+            if (!balancingMinigame.potType) {
+              balancingMinigame.potType = 'regular';
+            }
+
+            if (!balancingMinigame.breaking) {
+              ctx.save();
+              // Translate to the contact point (where pot touches stick tip)
+              ctx.translate(stickX, potContactY);
+              // Rotate around the contact point (ensure angle is a number)
+              const potAngle = balancingMinigame.potAngle || 0;
+              ctx.rotate(potAngle);
 
               // Select the correct pot sprite based on type
               let currentPotSprite = potSprite;
@@ -2531,13 +2863,13 @@
                 currentPotSprite = potShortGreySprite;
               }
 
-            // Draw pot sprite from PNG, offset upward so bottom is at rotation point
+              // Draw pot sprite from PNG, offset upward so bottom is at rotation point
               if (
                 currentPotSprite.complete &&
                 currentPotSprite.naturalWidth > 0
               ) {
-              ctx.imageSmoothingEnabled = false;
-              // Draw with bottom at origin (0, 0), so pot extends upward
+                ctx.imageSmoothingEnabled = false;
+                // Draw with bottom at origin (0, 0), so pot extends upward
                 ctx.drawImage(
                   currentPotSprite,
                   -potSize / 2,
@@ -2545,7 +2877,7 @@
                   potSize,
                   potSize
                 );
-            } else {
+              } else {
                 // Placeholder while loading (color varies by type)
                 if (balancingMinigame.potType === 'tall') {
                   ctx.fillStyle = '#d2b48c'; // Tan color
@@ -2554,7 +2886,7 @@
                 } else {
                   ctx.fillStyle = '#8b4513'; // Brown for regular
                 }
-              ctx.beginPath();
+                ctx.beginPath();
                 ctx.ellipse(
                   0,
                   -potSize / 2,
@@ -2564,99 +2896,99 @@
                   0,
                   Math.PI * 2
                 );
-              ctx.fill();
+                ctx.fill();
+              }
+
+              ctx.restore();
             }
 
-            ctx.restore();
-          }
-
-          // Draw breaking pot pieces
+            // Draw breaking pot pieces
             if (
               balancingMinigame.breaking &&
               balancingMinigame.pieces.length > 0
             ) {
-            for (let i = 0; i < balancingMinigame.pieces.length; i++) {
-              const piece = balancingMinigame.pieces[i];
-              if (piece.opacity > 0) {
-                ctx.save();
-                ctx.globalAlpha = piece.opacity;
-                ctx.translate(piece.x, piece.y);
-                ctx.rotate(piece.rotation);
+              for (let i = 0; i < balancingMinigame.pieces.length; i++) {
+                const piece = balancingMinigame.pieces[i];
+                if (piece.opacity > 0) {
+                  ctx.save();
+                  ctx.globalAlpha = piece.opacity;
+                  ctx.translate(piece.x, piece.y);
+                  ctx.rotate(piece.rotation);
 
-                // Draw pot piece (brown fragment)
-                ctx.fillStyle = '#8b4513';
-                ctx.strokeStyle = '#654321';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
+                  // Draw pot piece (brown fragment)
+                  ctx.fillStyle = '#8b4513';
+                  ctx.strokeStyle = '#654321';
+                  ctx.lineWidth = 1;
+                  ctx.beginPath();
                   ctx.rect(
                     -piece.size / 2,
                     -piece.size / 2,
                     piece.size,
                     piece.size
                   );
-                ctx.fill();
-                ctx.stroke();
+                  ctx.fill();
+                  ctx.stroke();
 
-                ctx.restore();
+                  ctx.restore();
+                }
               }
             }
-          }
 
-          // Timer text
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 72px ui-monospace, Menlo, Consolas, monospace'; // 3x bigger (24 * 3)
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
+            // Timer text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 72px ui-monospace, Menlo, Consolas, monospace'; // 3x bigger (24 * 3)
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
             const timeText = Math.ceil(
               balancingMinigame.timeRemaining
             ).toString();
-          ctx.fillText(`Time: ${timeText}s`, canvas.width / 2, panelY + 20);
+            ctx.fillText(`Time: ${timeText}s`, canvas.width / 2, panelY + 20);
 
-          // Instructions
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '18px ui-monospace, Menlo, Consolas, monospace';
-          ctx.textBaseline = 'bottom';
+            // Instructions
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '18px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textBaseline = 'bottom';
             ctx.fillText(
               'Use arrow keys to keep the pot from tipping!',
               canvas.width / 2,
               panelY + panelHeight - 20
             );
 
-          ctx.restore();
-        }
+            ctx.restore();
+          }
 
-        // Draw brushing minigame
-        if (brushingMinigame.active) {
-          ctx.save();
-
-          // Background overlay
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          // Minigame panel
-          const panelWidth = 450;
-          const panelHeight = 350;
-          const panelX = (canvas.width - panelWidth) / 2;
-          const panelY = (canvas.height - panelHeight) / 2;
-
-          ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
-          ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-
-          ctx.strokeStyle = '#ffffff'; // White menu borders
-          ctx.lineWidth = 3;
-          ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
-
-          // Draw dirt sprite (in center, with red tint based on redness)
-          const dirtSize = 150;
-          const dirtX = canvas.width / 2;
-          const dirtY = canvas.height / 2;
-
-          if (dirtSprite.complete && dirtSprite.naturalWidth > 0) {
+          // Draw brushing minigame
+          if (brushingMinigame.active) {
             ctx.save();
-            ctx.imageSmoothingEnabled = false;
 
-            // Draw dirt sprite normally first
-            ctx.globalAlpha = 1.0;
+            // Background overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Minigame panel
+            const panelWidth = 450;
+            const panelHeight = 350;
+            const panelX = (canvas.width - panelWidth) / 2;
+            const panelY = (canvas.height - panelHeight) / 2;
+
+            ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
+            ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+
+            ctx.strokeStyle = '#ffffff'; // White menu borders
+            ctx.lineWidth = 3;
+            ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+            // Draw dirt sprite (in center, with red tint based on redness)
+            const dirtSize = 150;
+            const dirtX = canvas.width / 2;
+            const dirtY = canvas.height / 2;
+
+            if (dirtSprite.complete && dirtSprite.naturalWidth > 0) {
+              ctx.save();
+              ctx.imageSmoothingEnabled = false;
+
+              // Draw dirt sprite normally first
+              ctx.globalAlpha = 1.0;
               ctx.drawImage(
                 dirtSprite,
                 dirtX - dirtSize / 2,
@@ -2665,13 +2997,13 @@
                 dirtSize
               );
 
-            // Apply red color tint using multiply blend mode (gradual transition)
-            const redness = brushingMinigame.redness;
-            if (redness > 0) {
-              // Set blend mode to multiply for color tinting effect
-              ctx.globalCompositeOperation = 'multiply';
-              ctx.globalAlpha = redness; // Fade in the red over 1 second
-              ctx.fillStyle = '#ff0000';
+              // Apply red color tint using multiply blend mode (gradual transition)
+              const redness = brushingMinigame.redness;
+              if (redness > 0) {
+                // Set blend mode to multiply for color tinting effect
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.globalAlpha = redness; // Fade in the red over 1 second
+                ctx.fillStyle = '#ff0000';
                 ctx.fillRect(
                   dirtX - dirtSize / 2,
                   dirtY - dirtSize / 2,
@@ -2679,50 +3011,50 @@
                   dirtSize
                 );
 
-              // Reset blend mode
-              ctx.globalCompositeOperation = 'source-over';
+                // Reset blend mode
+                ctx.globalCompositeOperation = 'source-over';
 
-              // Add a subtle glow when fully red
-              if (redness >= 1.0) {
-                const pulse = Math.sin(Date.now() / 150) * 0.2 + 0.8;
-                ctx.globalAlpha = pulse * 0.15;
-                ctx.fillStyle = '#ff3333';
+                // Add a subtle glow when fully red
+                if (redness >= 1.0) {
+                  const pulse = Math.sin(Date.now() / 150) * 0.2 + 0.8;
+                  ctx.globalAlpha = pulse * 0.15;
+                  ctx.fillStyle = '#ff3333';
                   ctx.fillRect(
                     dirtX - dirtSize / 2 - 5,
                     dirtY - dirtSize / 2 - 5,
                     dirtSize + 10,
                     dirtSize + 10
                   );
+                }
               }
-            }
 
-            ctx.restore();
-          } else {
-            // Fallback while loading
-            const redness = brushingMinigame.redness;
-            // Blend from brown to red based on redness value
-            const r = Math.round(139 + (255 - 139) * redness);
-            const g = Math.round(69 * (1 - redness));
-            const b = Math.round(19 * (1 - redness));
-            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-            ctx.beginPath();
+              ctx.restore();
+            } else {
+              // Fallback while loading
+              const redness = brushingMinigame.redness;
+              // Blend from brown to red based on redness value
+              const r = Math.round(139 + (255 - 139) * redness);
+              const g = Math.round(69 * (1 - redness));
+              const b = Math.round(19 * (1 - redness));
+              ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+              ctx.beginPath();
               ctx.rect(
                 dirtX - dirtSize / 2,
                 dirtY - dirtSize / 2,
                 dirtSize,
                 dirtSize
               );
-            ctx.fill();
-          }
+              ctx.fill();
+            }
 
-          // Draw brush sprite - now animated with brushOffset
-          const brushSize = 80;
-          const brushX = canvas.width / 2 + brushingMinigame.brushOffset; // Add offset for animation
-          const brushY = brushingMinigame.brushY;
+            // Draw brush sprite - now animated with brushOffset
+            const brushSize = 80;
+            const brushX = canvas.width / 2 + brushingMinigame.brushOffset; // Add offset for animation
+            const brushY = brushingMinigame.brushY;
 
-          if (brushSprite.complete && brushSprite.naturalWidth > 0) {
-            ctx.save();
-            ctx.imageSmoothingEnabled = false;
+            if (brushSprite.complete && brushSprite.naturalWidth > 0) {
+              ctx.save();
+              ctx.imageSmoothingEnabled = false;
               ctx.drawImage(
                 brushSprite,
                 brushX - brushSize / 2,
@@ -2730,44 +3062,44 @@
                 brushSize,
                 brushSize
               );
-            ctx.restore();
-          } else {
-            // Fallback while loading
-            ctx.fillStyle = '#8b7355';
-            ctx.beginPath();
+              ctx.restore();
+            } else {
+              // Fallback while loading
+              ctx.fillStyle = '#8b7355';
+              ctx.beginPath();
               ctx.rect(
                 brushX - brushSize / 2,
                 brushY - brushSize / 2,
                 brushSize,
                 brushSize
               );
-            ctx.fill();
-          }
+              ctx.fill();
+            }
 
-          // Draw particles
-          for (const p of brushingMinigame.particles) {
-            ctx.save();
-            ctx.globalAlpha = p.life; // Fade out as life decreases
-            ctx.fillStyle = '#8b4513'; // Brown dirt color
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-          }
+            // Draw particles
+            for (const p of brushingMinigame.particles) {
+              ctx.save();
+              ctx.globalAlpha = p.life; // Fade out as life decreases
+              ctx.fillStyle = '#8b4513'; // Brown dirt color
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.restore();
+            }
 
-          // Instructions
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '14px ui-monospace, Menlo, Consolas, monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
+            // Instructions
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '14px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
             ctx.fillText(
               'Hold SPACE to brush the dirt clean!',
               canvas.width / 2,
               panelY + 20
             );
 
-          ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
-          ctx.textBaseline = 'bottom';
+            ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textBaseline = 'bottom';
             ctx.fillText(
               'When it turns RED, release SPACE quickly for max cash!',
               canvas.width / 2,
@@ -2808,6 +3140,52 @@
               Math.round(canvas.width / 2),
               Math.round(panelY + 20)
             );
+
+            // Close button (X) in top-right corner - made bigger for easier clicking
+            const closeButtonSize = 40; // Increased from typical 20-30px for easier clicking
+            const closeButtonX = panelX + panelWidth - closeButtonSize - 10;
+            const closeButtonY = panelY + 10;
+            const closeButtonPadding = 8; // Padding inside the button
+
+            // Check if mouse is hovering over close button
+            const isHoveringClose =
+              mouseX >= closeButtonX &&
+              mouseX <= closeButtonX + closeButtonSize &&
+              mouseY >= closeButtonY &&
+              mouseY <= closeButtonY + closeButtonSize;
+
+            // Draw close button background (slightly visible on hover)
+            if (isHoveringClose) {
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+              ctx.fillRect(
+                Math.round(closeButtonX),
+                Math.round(closeButtonY),
+                closeButtonSize,
+                closeButtonSize
+              );
+            }
+
+            // Draw X symbol
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(
+              closeButtonX + closeButtonPadding,
+              closeButtonY + closeButtonPadding
+            );
+            ctx.lineTo(
+              closeButtonX + closeButtonSize - closeButtonPadding,
+              closeButtonY + closeButtonSize - closeButtonPadding
+            );
+            ctx.moveTo(
+              closeButtonX + closeButtonSize - closeButtonPadding,
+              closeButtonY + closeButtonPadding
+            );
+            ctx.lineTo(
+              closeButtonX + closeButtonPadding,
+              closeButtonY + closeButtonSize - closeButtonPadding
+            );
+            ctx.stroke();
 
             // Divide panel into two columns
             const columnWidth = (panelWidth - 60) / 2; // Leave space for divider and padding
@@ -2920,8 +3298,8 @@
                 buttonWidth,
                 buttonHeight
               );
-              ctx.strokeStyle = isHoveringDisplay ? '#ffff00' : '#ffffff'; // Yellow border on hover
-              ctx.lineWidth = isHoveringDisplay ? 3 : 2; // Thicker border on hover
+              ctx.strokeStyle = '#ffffff'; // White border (no yellow on hover)
+              ctx.lineWidth = 2;
               ctx.strokeRect(
                 Math.round(displayButtonX),
                 Math.round(buttonY),
@@ -2958,8 +3336,8 @@
                 buttonWidth,
                 buttonHeight
               );
-              ctx.strokeStyle = isHoveringThrowAway ? '#ffff00' : '#ffffff'; // Yellow border on hover
-              ctx.lineWidth = isHoveringThrowAway ? 3 : 2; // Thicker border on hover
+              ctx.strokeStyle = '#ffffff'; // White border (no yellow on hover)
+              ctx.lineWidth = 2;
               ctx.strokeRect(
                 Math.round(throwAwayButtonX),
                 Math.round(buttonY),
@@ -3081,288 +3459,347 @@
               panelY + panelHeight - 20
             );
 
-          ctx.restore();
+            ctx.restore();
+          }
+
+          // Draw inventory menu
+          if (inventory.open) {
+            drawInventory();
+          }
+
+          // Draw shop menu
+          if (shop.open) {
+            drawShopMenu();
+          }
+
+          // Draw dialogue textbox (RPG style at top of screen)
+          if (tutorial.active || shopkeeper.dialogue || oldGuy.dialogue) {
+            drawDialogueBox();
+          }
         }
 
-        // Draw inventory menu
-        if (inventory.open) {
-          drawInventory();
-        }
+        function drawShopMenu() {
+          ctx.save();
 
-        // Draw shop menu
-        if (shop.open) {
-          drawShopMenu();
-        }
-
-        // Draw dialogue textbox (RPG style at top of screen)
-        if (tutorial.active || shopkeeper.dialogue || oldGuy.dialogue) {
-          drawDialogueBox();
-        }
-      }
-
-      function drawShopMenu() {
-        ctx.save();
-
-        const shopWidth = 400;
-        const itemHeight = 50;
-        const itemPadding = 10;
-        const titleHeight = 40;
-        const instructionsHeight = 25;
-        const topPadding = 15;
-        const bottomPadding = 15;
+          const shopWidth = 400;
+          const itemHeight = 50;
+          const itemPadding = 10;
+          const titleHeight = 40;
+          const tabHeight = 30;
+          const instructionsHeight = 25;
+          const topPadding = 15;
+          const bottomPadding = 15;
           const shopHeight =
             titleHeight +
+            tabHeight +
             topPadding +
             shop.items.length * itemHeight +
             (shop.items.length - 1) * itemPadding +
             bottomPadding +
             instructionsHeight;
-        const shopX = Math.round(canvas.width / 2 - shopWidth / 2) + 0.5;
-        const shopY = Math.round(canvas.height / 2 - shopHeight / 2) + 0.5;
+          const shopX = Math.round(canvas.width / 2 - shopWidth / 2) + 0.5;
+          const shopY = Math.round(canvas.height / 2 - shopHeight / 2) + 0.5;
 
-        // Background overlay
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+          // Background overlay
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Shop panel background
-        ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
-        ctx.beginPath();
-        ctx.rect(shopX, shopY, shopWidth, shopHeight);
-        ctx.fill();
+          // Shop panel background
+          ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
+          ctx.beginPath();
+          ctx.rect(shopX, shopY, shopWidth, shopHeight);
+          ctx.fill();
 
-        // Shop panel border
-        ctx.strokeStyle = '#ffffff'; // White borders
-        ctx.lineWidth = 3;
-        ctx.strokeRect(shopX, shopY, shopWidth, shopHeight);
+          // Shop panel border
+          ctx.strokeStyle = '#ffffff'; // White borders
+          ctx.lineWidth = 3;
+          ctx.strokeRect(shopX, shopY, shopWidth, shopHeight);
 
-        // Title
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText('Shop', shopX + shopWidth / 2, shopY + 12);
+          // Title
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          ctx.fillText('Shop', shopX + shopWidth / 2, shopY + 12);
 
-        // Draw shop items
-        const startY = shopY + titleHeight + topPadding;
-        for (let i = 0; i < shop.items.length; i++) {
-          const item = shop.items[i];
-          const itemY = startY + i * (itemHeight + itemPadding);
-          const itemRectX = shopX + 20;
-          const itemRectY = itemY;
-          const itemRectW = shopWidth - 40;
-          const itemRectH = itemHeight;
+          // Tabs
+          const tabWidth = shopWidth / shop.tabs.length;
+          for (let i = 0; i < shop.tabs.length; i++) {
+            const tabX = shopX + i * tabWidth;
+            const tabY = shopY + titleHeight;
+            const isActive = shop.currentTab === i;
 
-          // Check if player already owns this tier
-            const alreadyOwned =
-              inventory.equipment && inventory.equipment.tier === item.tier;
+            // Tab background
+            ctx.fillStyle = isActive
+              ? 'rgba(20, 40, 30, 0.9)'
+              : 'rgba(15, 30, 20, 0.6)';
+            ctx.fillRect(tabX, tabY, tabWidth, tabHeight);
 
-          // Item background
+            // Tab border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(tabX, tabY, tabWidth, tabHeight);
+
+            // Tab text
+            ctx.fillStyle = '#ffffff';
+            ctx.font = isActive
+              ? 'bold 14px ui-monospace, Menlo, Consolas, monospace'
+              : '14px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(
+              shop.tabs[i].name,
+              tabX + tabWidth / 2,
+              tabY + tabHeight / 2
+            );
+          }
+
+          // Draw shop items
+          const startY = shopY + titleHeight + tabHeight + topPadding;
+          for (let i = 0; i < shop.items.length; i++) {
+            const item = shop.items[i];
+            const itemY = startY + i * (itemHeight + itemPadding);
+            const itemRectX = shopX + 20;
+            const itemRectY = itemY;
+            const itemRectW = shopWidth - 40;
+            const itemRectH = itemHeight;
+
+            // Check if player already owns this item
+            let alreadyOwned = false;
+            if (item.type === 'shovel') {
+              alreadyOwned =
+                inventory.equipment &&
+                inventory.equipment.tier === item.tier &&
+                inventory.equipment.type === 'shovel';
+            } else if (item.type === 'equipment' && item.name === 'Radar') {
+              alreadyOwned = radar.active;
+            }
+
+            // Item background
             ctx.fillStyle = alreadyOwned
               ? 'rgba(15, 30, 20, 0.6)'
               : 'rgba(20, 40, 30, 0.8)';
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; // White borders
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.rect(itemRectX, itemRectY, itemRectW, itemRectH);
-          ctx.fill();
-          ctx.stroke();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; // White borders
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.rect(itemRectX, itemRectY, itemRectW, itemRectH);
+            ctx.fill();
+            ctx.stroke();
 
-          // Item name
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'top';
-          ctx.fillText(item.name, itemRectX + 10, itemRectY + 6);
-
-          // Item tier
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-          ctx.fillText(`Tier ${item.tier}`, itemRectX + 10, itemRectY + 22);
-
-          if (alreadyOwned) {
-            // Show "Sold" for already owned items
+            // Item name
             ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 16px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'right';
-            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText(item.name, itemRectX + 10, itemRectY + 6);
+
+            // Item tier (only for shovels)
+            if (item.type === 'shovel') {
+              ctx.fillStyle = '#ffffff';
+              ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+              ctx.fillText(`Tier ${item.tier}`, itemRectX + 10, itemRectY + 22);
+            }
+
+            if (alreadyOwned) {
+              // Show "Sold" for already owned items
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 16px ui-monospace, Menlo, Consolas, monospace';
+              ctx.textAlign = 'right';
+              ctx.textBaseline = 'middle';
               ctx.fillText(
                 'SOLD',
                 itemRectX + itemRectW - 10,
                 itemRectY + itemRectH / 2
               );
-          } else {
-            // Price
-            const priceText = `$${item.price}`;
-            const canAfford = money.amount >= item.price;
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'right';
+            } else {
+              // Price
+              const priceText = `$${item.price}`;
+              const canAfford = money.amount >= item.price;
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
+              ctx.textAlign = 'right';
               ctx.fillText(
                 priceText,
                 itemRectX + itemRectW - 10,
                 itemRectY + 14
               );
 
-            // Buy button indicator
-            if (canAfford) {
-              ctx.fillStyle = '#ffffff';
-              ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-              ctx.textAlign = 'right';
+              // Buy button indicator (click to buy)
+              if (canAfford) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+                ctx.textAlign = 'right';
                 ctx.fillText(
-                  'Press ' + (i + 1) + ' to buy',
+                  'Click to buy',
                   itemRectX + itemRectW - 10,
                   itemRectY + 32
                 );
-            } else {
-              ctx.fillStyle = '#ffffff';
-              ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-              ctx.textAlign = 'right';
+              } else {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+                ctx.textAlign = 'right';
                 ctx.fillText(
                   'Cannot afford',
                   itemRectX + itemRectW - 10,
                   itemRectY + 32
                 );
+              }
             }
           }
-        }
 
-        // Instructions
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
+          // Instructions
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
           ctx.fillText(
-            'Press Spacebar to close | Press 1-5 to buy',
+            'Press Spacebar to close | Click tabs and items to interact',
             shopX + shopWidth / 2,
             shopY + shopHeight - 10
           );
 
-        ctx.restore();
-      }
-
-      function purchaseItem(itemIndex) {
-        if (itemIndex < 0 || itemIndex >= shop.items.length) return;
-
-        const item = shop.items[itemIndex];
-
-        // Check if player already owns a shovel of this tier
-        if (inventory.equipment && inventory.equipment.tier === item.tier) {
-          return; // Already own this type of shovel
+          ctx.restore();
         }
 
-        if (money.amount >= item.price) {
-          money.amount -= item.price;
-          // Get the appropriate sprite for this shovel tier
-          let sprite = shovelSprites[item.tier];
-          // If sprite not loaded yet, load it now
-          if (!sprite) {
-              const spriteName =
-                'assets/sprites/' +
-                item.name.toLowerCase().replace(/\s+/g, '-') +
-                '.png';
-            sprite = loadShovelSprite(item.tier, spriteName);
+        function purchaseItem(itemIndex) {
+          if (itemIndex < 0 || itemIndex >= shop.items.length) return;
+
+          const item = shop.items[itemIndex];
+
+          if (item.type === 'shovel') {
+            // Check if player already owns a shovel of this tier
+            if (inventory.equipment && inventory.equipment.tier === item.tier) {
+              return; // Already own this type of shovel
+            }
+
+            if (money.amount >= item.price) {
+              money.amount -= item.price;
+              // Get the appropriate sprite for this shovel tier
+              let sprite = shovelSprites[item.tier];
+              // If sprite not loaded yet, load it now
+              if (!sprite) {
+                const spriteName =
+                  'assets/sprites/' +
+                  item.name.toLowerCase().replace(/\s+/g, '-') +
+                  '.png';
+                sprite = loadShovelSprite(item.tier, spriteName);
+              }
+              // Add shovel to equipment slot
+              inventory.equipment = {
+                name: item.name,
+                tier: item.tier,
+                sprite: sprite,
+                type: 'shovel',
+              };
+            }
+          } else if (item.type === 'equipment' && item.name === 'Radar') {
+            // Check if player already owns radar
+            if (radar.active) {
+              return; // Already own radar
+            }
+
+            if (money.amount >= item.price) {
+              money.amount -= item.price;
+              // Activate radar
+              radar.active = true;
+              radar.ringTimer = 0;
+              radar.rings = [];
+            }
           }
-          // Add shovel to equipment slot
-          inventory.equipment = {
-            name: item.name,
-            tier: item.tier,
-              sprite: sprite,
-          };
         }
-      }
 
-      function drawDialogueBox() {
-        ctx.save();
+        function drawDialogueBox() {
+          ctx.save();
 
-        const boxHeight = 100;
-        const boxY = 0; // Top of screen instead of bottom
-        const boxPadding = 20;
-        const boxMargin = 20;
-        const boxX = boxMargin;
-        const boxWidth = canvas.width - boxMargin * 2;
+          const boxHeight = 100;
+          const boxY = 0; // Top of screen instead of bottom
+          const boxPadding = 20;
+          const boxMargin = 20;
+          const boxX = boxMargin;
+          const boxWidth = canvas.width - boxMargin * 2;
 
-        // Background with slight transparency
-        ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
-        ctx.beginPath();
-        ctx.rect(boxX, boxY, boxWidth, boxHeight);
-        ctx.fill();
+          // Background with slight transparency
+          ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
+          ctx.beginPath();
+          ctx.rect(boxX, boxY, boxWidth, boxHeight);
+          ctx.fill();
 
-        // Border
-        ctx.strokeStyle = '#ffffff'; // White borders
-        ctx.lineWidth = 3;
-        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+          // Border
+          ctx.strokeStyle = '#ffffff'; // White borders
+          ctx.lineWidth = 3;
+          ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
 
-        // Inner border for depth
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; // Lighter white for inner border
-        ctx.lineWidth = 1;
-        ctx.strokeRect(boxX + 2, boxY + 2, boxWidth - 4, boxHeight - 4);
+          // Inner border for depth
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; // Lighter white for inner border
+          ctx.lineWidth = 1;
+          ctx.strokeRect(boxX + 2, boxY + 2, boxWidth - 4, boxHeight - 4);
 
-        // Dialogue text
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '16px ui-monospace, Menlo, Consolas, monospace';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'top';
+          // Dialogue text
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '16px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
 
-        // Word wrap the dialogue text
-        const maxWidth = boxWidth - boxPadding * 2;
+          // Word wrap the dialogue text
+          const maxWidth = boxWidth - boxPadding * 2;
           const dialogueText = tutorial.active
             ? tutorial.dialogue
             : shopkeeper.dialogue || oldGuy.dialogue || '';
-        const words = dialogueText.split(' ');
-        let line = '';
-        let y = boxY + boxPadding;
+          const words = dialogueText.split(' ');
+          let line = '';
+          let y = boxY + boxPadding;
 
-        for (let i = 0; i < words.length; i++) {
-          const testLine = line + words[i] + ' ';
-          const metrics = ctx.measureText(testLine);
-          const testWidth = metrics.width;
+          for (let i = 0; i < words.length; i++) {
+            const testLine = line + words[i] + ' ';
+            const metrics = ctx.measureText(testLine);
+            const testWidth = metrics.width;
 
-          if (testWidth > maxWidth && i > 0) {
-            ctx.fillText(line, boxX + boxPadding, y);
-            line = words[i] + ' ';
-            y += 22; // Line height
-          } else {
-            line = testLine;
+            if (testWidth > maxWidth && i > 0) {
+              ctx.fillText(line, boxX + boxPadding, y);
+              line = words[i] + ' ';
+              y += 22; // Line height
+            } else {
+              line = testLine;
+            }
           }
-        }
-        ctx.fillText(line, boxX + boxPadding, y);
+          ctx.fillText(line, boxX + boxPadding, y);
 
-        // Draw help text in bottom right of textbox (only for tutorial)
-        if (tutorial.active) {
+          // Draw help text in bottom right of textbox (only for tutorial)
+          if (tutorial.active) {
             const helpText =
               'Press Spacebar to progress textboxes and talk to people';
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
-          ctx.textAlign = 'right';
-          ctx.textBaseline = 'bottom';
-          // Move further down and to the right (reduce padding more)
-          ctx.fillText(helpText, boxX + boxWidth - 10, boxY + boxHeight - 10);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            // Move further down and to the right (reduce padding more)
+            ctx.fillText(helpText, boxX + boxWidth - 10, boxY + boxHeight - 10);
+          }
+
+          ctx.restore();
         }
 
-        ctx.restore();
-      }
+        function drawInventory() {
+          ctx.save();
 
-      function drawInventory() {
-        ctx.save();
+          // Artifacts panel dimensions
+          const slotSize = 48;
+          const slotSpacing = 4;
+          const slotsPerRow = 5;
+          const numRows = 3;
+          const panelPadding = 24;
+          const equipmentSlotSize = 64;
+          const titleHeight = 40;
+          const equipmentLabelHeight = 16;
+          const equipmentSpacing = 20;
+          const instructionsHeight = 30;
 
-        // Artifacts panel dimensions
-        const slotSize = 48;
-        const slotSpacing = 4;
-        const slotsPerRow = 5;
-        const numRows = 3;
-        const panelPadding = 24;
-        const equipmentSlotSize = 64;
-        const titleHeight = 40;
-        const equipmentLabelHeight = 16;
-        const equipmentSpacing = 20;
-        const instructionsHeight = 30;
-
-        // Calculate proper dimensions to fit all slots
+          // Calculate proper dimensions to fit all slots
           const slotsAreaWidth =
             slotsPerRow * slotSize + (slotsPerRow - 1) * slotSpacing;
           const slotsAreaHeight =
             numRows * slotSize + (numRows - 1) * slotSpacing;
-        const inventoryWidth = slotsAreaWidth + panelPadding * 2;
+          const inventoryWidth = slotsAreaWidth + panelPadding * 2;
           const inventoryHeight =
             titleHeight +
             equipmentSlotSize +
@@ -3377,126 +3814,126 @@
           const panelY =
             Math.round(canvas.height / 2 - inventoryHeight / 2) + 0.5;
 
-        // Background with semi-transparent overlay
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+          // Background with semi-transparent overlay
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Main panel background
-        ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
-        ctx.beginPath();
-        ctx.rect(panelX, panelY, inventoryWidth, inventoryHeight);
-        ctx.fill();
+          // Main panel background
+          ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
+          ctx.beginPath();
+          ctx.rect(panelX, panelY, inventoryWidth, inventoryHeight);
+          ctx.fill();
 
-        // Panel border
-        ctx.strokeStyle = '#ffffff'; // White borders
-        ctx.lineWidth = 2;
-        ctx.strokeRect(panelX, panelY, inventoryWidth, inventoryHeight);
+          // Panel border
+          ctx.strokeStyle = '#ffffff'; // White borders
+          ctx.lineWidth = 2;
+          ctx.strokeRect(panelX, panelY, inventoryWidth, inventoryHeight);
 
-        // Title
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
+          // Title
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
           ctx.fillText('Tools', panelX + inventoryWidth / 2, panelY + 12);
 
-        // Equipment slot (at the top, centered)
+          // Equipment slot (at the top, centered)
           const equipmentX =
             panelX + inventoryWidth / 2 - equipmentSlotSize / 2;
-        const equipmentY = panelY + titleHeight;
-        ctx.fillStyle = 'rgba(20, 40, 30, 0.8)';
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; // White with slight transparency
-        ctx.lineWidth = 2;
-        ctx.beginPath();
+          const equipmentY = panelY + titleHeight;
+          ctx.fillStyle = 'rgba(20, 40, 30, 0.8)';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; // White with slight transparency
+          ctx.lineWidth = 2;
+          ctx.beginPath();
           ctx.rect(
             equipmentX,
             equipmentY,
             equipmentSlotSize,
             equipmentSlotSize
           );
-        ctx.fill();
-        ctx.stroke();
+          ctx.fill();
+          ctx.stroke();
 
-        // Draw equipment sprite if equipped
-        if (inventory.equipment && inventory.equipment.sprite) {
-          const sprite = inventory.equipment.sprite;
-          // Only draw if image is loaded
-          if (sprite.complete && sprite.naturalWidth > 0) {
-            const spriteSize = equipmentSlotSize - 8; // Leave some padding
-            const spriteX = equipmentX + (equipmentSlotSize - spriteSize) / 2;
-            const spriteY = equipmentY + (equipmentSlotSize - spriteSize) / 2;
-            ctx.save();
-            ctx.imageSmoothingEnabled = false; // Pixelated rendering
-            ctx.drawImage(sprite, spriteX, spriteY, spriteSize, spriteSize);
-            ctx.restore();
+          // Draw equipment sprite if equipped
+          if (inventory.equipment && inventory.equipment.sprite) {
+            const sprite = inventory.equipment.sprite;
+            // Only draw if image is loaded
+            if (sprite.complete && sprite.naturalWidth > 0) {
+              const spriteSize = equipmentSlotSize - 8; // Leave some padding
+              const spriteX = equipmentX + (equipmentSlotSize - spriteSize) / 2;
+              const spriteY = equipmentY + (equipmentSlotSize - spriteSize) / 2;
+              ctx.save();
+              ctx.imageSmoothingEnabled = false; // Pixelated rendering
+              ctx.drawImage(sprite, spriteX, spriteY, spriteSize, spriteSize);
+              ctx.restore();
+            }
           }
-        }
 
-        // Equipment label (below the equipment slot)
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
+          // Equipment label (below the equipment slot)
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
           ctx.fillText(
             'Equipment',
             equipmentX + equipmentSlotSize / 2,
             equipmentY + equipmentSlotSize + 4
           );
 
-        // Artifact slots grid (below equipment label)
-        const slotsStartX = panelX + panelPadding;
+          // Artifact slots grid (below equipment label)
+          const slotsStartX = panelX + panelPadding;
           const slotsStartY =
             equipmentY +
             equipmentSlotSize +
             equipmentLabelHeight +
             equipmentSpacing;
 
-        for (let row = 0; row < numRows; row++) {
-          for (let col = 0; col < slotsPerRow; col++) {
-            const slotIndex = row * slotsPerRow + col;
-            const slotX = slotsStartX + col * (slotSize + slotSpacing);
-            const slotY = slotsStartY + row * (slotSize + slotSpacing);
+          for (let row = 0; row < numRows; row++) {
+            for (let col = 0; col < slotsPerRow; col++) {
+              const slotIndex = row * slotsPerRow + col;
+              const slotX = slotsStartX + col * (slotSize + slotSpacing);
+              const slotY = slotsStartY + row * (slotSize + slotSpacing);
 
-            // Slot background
-            ctx.fillStyle = 'rgba(20, 40, 30, 0.8)';
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; // White borders
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.rect(slotX, slotY, slotSize, slotSize);
-            ctx.fill();
-            ctx.stroke();
+              // Slot background
+              ctx.fillStyle = 'rgba(20, 40, 30, 0.8)';
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; // White borders
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.rect(slotX, slotY, slotSize, slotSize);
+              ctx.fill();
+              ctx.stroke();
 
-            // Draw item if present (currently all slots are empty)
-            if (inventory.slots[slotIndex]) {
-              // Item rendering would go here when items are added
+              // Draw item if present (currently all slots are empty)
+              if (inventory.slots[slotIndex]) {
+                // Item rendering would go here when items are added
+              }
             }
           }
-        }
 
-        // Instructions
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
+          // Instructions
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
           ctx.fillText(
             'Press E to close',
             panelX + inventoryWidth / 2,
             panelY + inventoryHeight - 12
           );
 
-        ctx.restore();
-                    }
+          ctx.restore();
+        }
 
-      let lastTime = performance.now();
-      function loop(now) {
-        const dt = Math.min(33, now - lastTime);
-        lastTime = now;
-        update(dt);
-        render();
+        let lastTime = performance.now();
+        function loop(now) {
+          const dt = Math.min(33, now - lastTime);
+          lastTime = now;
+          update(dt);
+          render();
+          requestAnimationFrame(loop);
+        }
+
         requestAnimationFrame(loop);
-      }
-
-      requestAnimationFrame(loop);
-    })();
+      })();
     </script>
-</body>
+  </body>
 </html>
