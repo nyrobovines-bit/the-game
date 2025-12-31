@@ -99,6 +99,30 @@
           followLerp: 0.12,
         };
 
+        // Game state: 'title', 'playing', 'dayEnd', or 'weekEnd'
+        let gameState = 'title';
+
+        // Day/Time system
+        const dayTime = {
+          currentDay: 0, // 0 = Monday, 1 = Tuesday, ..., 6 = Sunday
+          currentHour: 8, // Start at 8 AM
+          currentMinute: 0,
+          timeInSeconds: 0, // Total seconds elapsed this day (0 to 500 for 8 AM to 6 PM)
+          secondsPerHour: 50, // Each in-game hour = 50 seconds
+          dayEndHour: 18, // 6 PM
+          warningHour: 17, // 5 PM (1 hour before end)
+          days: [
+            'Monday',
+            'Tuesday',
+            'Wednesday',
+            'Thursday',
+            'Friday',
+            'Saturday',
+            'Sunday',
+          ],
+          totalMoney: 0, // Track total money earned across the week
+        };
+
         const tileSize = 32;
         const tileCols = Math.ceil(world.width / tileSize);
         const tileRows = Math.ceil(world.height / tileSize);
@@ -291,34 +315,52 @@
         flowerSprite.imageSmoothingEnabled = false;
         flowerSprite.src = 'assets/sprites/Flowers.png';
 
-        // Function to regenerate all tiles (called when grass sprite loads)
+        // Function to regenerate tiles that use sprites (optimized - only regenerates when needed)
+        // Deferred to avoid blocking the main thread during load
+        let tileRegenerationScheduled = false;
         function regenerateTiles() {
-          for (let row = 0; row < tileRows; row++) {
-            for (let col = 0; col < tileCols; col++) {
-              const tile = tileMap[row][col];
-              if (tile) {
-                // Find the original tile definition
-                const def = tileDefinitions.find((d) => d.name === tile.name);
-                if (def) {
-                  // Regenerate the canvas with the now-loaded grass sprite
-                  tileMap[row][col] = {
-                    name: def.name,
-                    canvas: createTileCanvas(def.draw),
-                  };
+          // Defer regeneration to avoid blocking during sprite load
+          if (tileRegenerationScheduled) return;
+          tileRegenerationScheduled = true;
+
+          // Use requestAnimationFrame to defer to next frame, allowing page to be interactive
+          requestAnimationFrame(() => {
+            // Only regenerate tiles that use sprites (grass, flowers, and tiles with grass base)
+            const spriteTileNames = [
+              'grass',
+              'moundedBush',
+              'singleRock',
+              'rockCluster',
+              'redX',
+              'secretX',
+            ];
+
+            for (let row = 0; row < tileRows; row++) {
+              for (let col = 0; col < tileCols; col++) {
+                const tile = tileMap[row][col];
+                if (tile && spriteTileNames.includes(tile.name)) {
+                  // Find the original tile definition
+                  const def = tileDefinitions.find((d) => d.name === tile.name);
+                  if (def) {
+                    // Regenerate the canvas with the now-loaded sprites
+                    tileMap[row][col] = {
+                      name: def.name,
+                      canvas: createTileCanvas(def.draw),
+                    };
+                  }
                 }
               }
             }
-          }
+            tileRegenerationScheduled = false;
+          });
         }
 
-        // Regenerate tiles when grass sprite loads
-        // This ensures the grass sprite is drawn even if it loads after initial tile creation
+        // Regenerate tiles when grass sprite loads (deferred)
         grassSprite.onload = function () {
           regenerateTiles();
         };
 
-        // Regenerate tiles when flower sprite loads
-        // This ensures the flower sprite is drawn even if it loads after initial tile creation
+        // Regenerate tiles when flower sprite loads (deferred)
         flowerSprite.onload = function () {
           regenerateTiles();
         };
@@ -684,27 +726,33 @@
           return false;
         }
 
-        // Generate tiles with check for trees
-        const tileMap = [];
-        for (let row = 0; row < tileRows; row++) {
-          tileMap[row] = [];
-          for (let col = 0; col < tileCols; col++) {
-            let def = pickTileDefinition();
+        // Function to generate tiles (used at start and when resetting days)
+        function generateTiles() {
+          const newTileMap = [];
+          for (let row = 0; row < tileRows; row++) {
+            newTileMap[row] = [];
+            for (let col = 0; col < tileCols; col++) {
+              let def = pickTileDefinition();
 
-            // If redX or secretX tile was picked and there's a tree at this position, replace with grass
-            if (
-              (def.name === 'redX' || def.name === 'secretX') &&
-              isTreeAtTile(row, col)
-            ) {
-              def = tileDefinitions.find((d) => d.name === 'grass');
+              // If redX or secretX tile was picked and there's a tree at this position, replace with grass
+              if (
+                (def.name === 'redX' || def.name === 'secretX') &&
+                isTreeAtTile(row, col)
+              ) {
+                def = tileDefinitions.find((d) => d.name === 'grass');
+              }
+
+              newTileMap[row][col] = {
+                name: def.name,
+                canvas: createTileCanvas(def.draw),
+              };
             }
-
-            tileMap[row][col] = {
-              name: def.name,
-              canvas: createTileCanvas(def.draw),
-            };
           }
+          return newTileMap;
         }
+
+        // Generate initial tiles
+        let tileMap = generateTiles();
 
         // If sprites were already loaded before tiles were created, regenerate now
         if (
@@ -938,6 +986,27 @@
 
             // Declaration minigame: Removed keyboard controls, now uses buttons
 
+            // Day end: Space to continue to next day
+            if (gameState === 'dayEnd' && e.code === 'Space') {
+              e.preventDefault();
+              startNewDay();
+              return;
+            }
+
+            // Week end: Space to return to title
+            if (gameState === 'weekEnd' && e.code === 'Space') {
+              e.preventDefault();
+              gameState = 'title';
+              // Reset everything for new game
+              dayTime.currentDay = 0;
+              dayTime.currentHour = 8;
+              dayTime.currentMinute = 0;
+              dayTime.timeInSeconds = 0;
+              dayTime.totalMoney = 0;
+              money.amount = 0;
+              return;
+            }
+
             // Game over: Space to restart
             if (gameOver.active && e.code === 'Space') {
               e.preventDefault();
@@ -974,6 +1043,11 @@
 
         // Mouse click handling for buttons
         canvas.addEventListener('click', (e) => {
+          // Don't handle clicks if on title screen (title screen has its own handler)
+          if (gameState === 'title') {
+            return;
+          }
+
           const rect = canvas.getBoundingClientRect();
           // Account for canvas scaling - convert display coordinates to internal canvas coordinates
           const scaleX = canvas.width / rect.width;
@@ -1020,20 +1094,7 @@
               return;
             }
 
-            // Close button (X) in top-right corner
-            const closeButtonSize = 40; // Same size as in render function
-            const closeButtonX = panelX + panelWidth - closeButtonSize - 10;
-            const closeButtonY = panelY + 10;
-            if (
-              x >= closeButtonX &&
-              x <= closeButtonX + closeButtonSize &&
-              y >= closeButtonY &&
-              y <= closeButtonY + closeButtonSize
-            ) {
-              // Close the minigame without answering
-              declarationMinigame.active = false;
-              return;
-            }
+            // Close button removed
           }
 
           // Shop menu click handling
@@ -1100,11 +1161,72 @@
           return Math.min(max, Math.max(min, value));
         }
 
+        // Function to start a new day
+        function startNewDay() {
+          // Add current day's money to total
+          dayTime.totalMoney += money.amount;
+
+          // Move to next day
+          dayTime.currentDay++;
+
+          // Check if week is over (Sunday = day 6, so after Sunday we're done)
+          if (dayTime.currentDay > 6) {
+            // Week is over
+            gameState = 'weekEnd';
+            return;
+          }
+
+          // Reset time for new day
+          dayTime.currentHour = 8;
+          dayTime.currentMinute = 0;
+          dayTime.timeInSeconds = 0;
+
+          // Reset player to starting position
+          player.x = world.width / 2;
+          player.y = world.height - 40;
+          player.vx = 0;
+          player.vy = 0;
+
+          // Reset camera to player
+          camera.x = player.x;
+          camera.y = player.y;
+
+          // Regenerate tiles (randomize X's)
+          tileMap = generateTiles();
+
+          // Reset game state
+          gameState = 'playing';
+        }
+
         function update(dtMs) {
           const dt = (dtMs || 16.67) / 1000; // seconds
 
+          // Update day/time system (only when playing)
+          if (gameState === 'playing') {
+            dayTime.timeInSeconds += dt;
+
+            // Calculate current hour and minute
+            dayTime.currentHour =
+              Math.floor(dayTime.timeInSeconds / dayTime.secondsPerHour) + 8;
+            dayTime.currentMinute = Math.floor(
+              ((dayTime.timeInSeconds % dayTime.secondsPerHour) /
+                dayTime.secondsPerHour) *
+                60
+            );
+
+            // Check if day should end (6 PM = 18:00)
+            if (dayTime.currentHour >= dayTime.dayEndHour) {
+              gameState = 'dayEnd';
+              // Stop player movement
+              player.vx = 0;
+              player.vy = 0;
+            }
+          }
+
           // Only update player movement if inventory is closed, shop is closed, dialogue is not showing, tutorial is not active, crouch animation is not active, and minigame is not active
+          // Also don't update if day/week has ended
           if (
+            gameState === 'playing' &&
             !inventory.open &&
             !shop.open &&
             !shopkeeper.dialogue &&
@@ -1568,11 +1690,11 @@
                 // Only store minigame if on red X or secret X tile, otherwise just play animation
                 if (tile.name === 'redX' || tile.name === 'secretX') {
                   // Store which minigame to start after animation
-                  // Probabilities: 35% balancing (pots), 35% declaration (typo), 30% brushing
+                  // Probabilities: 40% balancing (pots), 40% declaration (typo), 20% brushing
                   const minigameRoll = Math.random();
-                  if (minigameRoll < 0.35) {
+                  if (minigameRoll < 0.4) {
                     crouchAnimation.pendingMinigame = 'balancing';
-                  } else if (minigameRoll < 0.7) {
+                  } else if (minigameRoll < 0.8) {
                     crouchAnimation.pendingMinigame = 'declaration';
                   } else {
                     crouchAnimation.pendingMinigame = 'brushing';
@@ -1769,7 +1891,7 @@
             const potSize = 100;
             const stickX = balancingMinigame.stickX;
             const stickTipY = balancingMinigame.stickY - 25;
-            const potContactY = stickTipY + 30; // Match the pot position from drawing code
+            const potContactY = stickTipY + 5; // Match the pot position from drawing code (slightly lower)
             const potCenterX = stickX;
             const potCenterY = potContactY - potSize / 2;
 
@@ -1896,7 +2018,7 @@
             brushingMinigame.timeHoldingSpace += dt;
 
             // Animate brush moving back and forth across the dirt
-            const brushSpeed = 100; // pixels per second
+            const brushSpeed = 200; // pixels per second (doubled from 100)
             brushingMinigame.brushOffset +=
               brushSpeed * dt * brushingMinigame.brushDirection;
 
@@ -2164,8 +2286,8 @@
             radar.lastDirection.y = player.vy / playerSpeed;
           }
 
-          // Radar follows behind player (much closer)
-          const followDistance = 15; // Much closer follow distance
+          // Radar appears behind player (further away)
+          const followDistance = 40; // Further away, behind player
           radar.x = player.x - radar.lastDirection.x * followDistance;
           radar.y = player.y - radar.lastDirection.y * followDistance;
 
@@ -2335,9 +2457,21 @@
         // Add more shovel sprites as needed for other tiers
 
         // Load radar sprites (optimized: set imageSmoothingEnabled before src)
-        const radarSprite = new Image();
+        const radarSprite = new Image(); // Default (up)
         radarSprite.imageSmoothingEnabled = false;
         radarSprite.src = 'assets/sprites/Radar.png';
+
+        const radarSpriteRight = new Image(); // Right
+        radarSpriteRight.imageSmoothingEnabled = false;
+        radarSpriteRight.src = 'assets/sprites/Radar-2.png';
+
+        const radarSpriteLeft = new Image(); // Left
+        radarSpriteLeft.imageSmoothingEnabled = false;
+        radarSpriteLeft.src = 'assets/sprites/Radar-3.png';
+
+        const radarSpriteDown = new Image(); // Down
+        radarSpriteDown.imageSmoothingEnabled = false;
+        radarSpriteDown.src = 'assets/sprites/Radar-4.png';
 
         const radarRingSprite = new Image();
         radarRingSprite.imageSmoothingEnabled = false;
@@ -2352,6 +2486,7 @@
           rings: [], // Active radar rings
           discoveredSecretX: [], // Array of discovered secret X positions {row, col}
           lastDirection: { x: 0, y: -1 }, // Last movement direction (default: up)
+          lastSpriteDirection: 'up', // Last sprite direction: 'up', 'down', 'left', 'right'
         };
 
         function drawFlora() {
@@ -2509,12 +2644,54 @@
           ctx.save();
           ctx.imageSmoothingEnabled = false;
 
-          // Draw radar sprite (follows behind player, same size as player)
-          if (radarSprite.complete && radarSprite.naturalWidth > 0) {
+          // Select radar sprite based on player's movement direction
+          // Update sprite direction when moving, keep last direction when stopped
+          const playerSpeed = Math.hypot(player.vx, player.vy);
+
+          if (playerSpeed > 0.1) {
+            // Player is moving - determine dominant direction and update
+            const absVx = Math.abs(player.vx);
+            const absVy = Math.abs(player.vy);
+
+            if (absVx > absVy) {
+              // Horizontal movement is dominant
+              if (player.vx > 0) {
+                radar.lastSpriteDirection = 'right';
+              } else {
+                radar.lastSpriteDirection = 'left';
+              }
+            } else if (absVy > absVx) {
+              // Vertical movement is dominant
+              if (player.vy > 0) {
+                radar.lastSpriteDirection = 'down';
+              } else {
+                radar.lastSpriteDirection = 'up';
+              }
+            }
+            // If absVx === absVy, keep current direction
+          }
+
+          // Use the stored sprite direction (persists when stopped)
+          let currentRadarSprite = radarSprite; // Default: up
+          if (radar.lastSpriteDirection === 'right') {
+            currentRadarSprite = radarSpriteRight;
+          } else if (radar.lastSpriteDirection === 'left') {
+            currentRadarSprite = radarSpriteLeft;
+          } else if (radar.lastSpriteDirection === 'down') {
+            currentRadarSprite = radarSpriteDown;
+          } else {
+            currentRadarSprite = radarSprite; // up
+          }
+
+          // Draw radar sprite (appears in front of player, same size as player)
+          if (
+            currentRadarSprite.complete &&
+            currentRadarSprite.naturalWidth > 0
+          ) {
             const radarSize = player.width; // Same size as player (43x43)
             const px = Math.round(radar.x - radarSize / 2);
             const py = Math.round(radar.y - radarSize / 2);
-            ctx.drawImage(radarSprite, px, py, radarSize, radarSize);
+            ctx.drawImage(currentRadarSprite, px, py, radarSize, radarSize);
           }
 
           // Draw radar rings (bigger)
@@ -2532,15 +2709,48 @@
             ctx.globalAlpha = 1.0; // Reset alpha
           }
 
-          // Draw markers for all discovered secret X tiles
-          ctx.fillStyle = '#ffff00'; // Yellow marker
+          // Draw yellow X markers for all discovered secret X tiles
+          ctx.fillStyle = '#ffff00'; // Yellow color
+          ctx.strokeStyle = '#ffff00';
+          ctx.lineWidth = 2;
           for (let i = 0; i < radar.discoveredSecretX.length; i++) {
             const pos = radar.discoveredSecretX[i];
             const worldX = (pos.col + 0.5) * tileSize;
             const worldY = (pos.row + 0.5) * tileSize;
-            ctx.beginPath();
-            ctx.arc(worldX, worldY, 8, 0, Math.PI * 2);
-            ctx.fill();
+
+            // Draw X shape (hue-shifted red X to yellow)
+            const maxIndex = cellsPerTile - 1;
+            const cellSize = tileSize / cellsPerTile;
+            for (let y = 0; y < cellsPerTile; y++) {
+              for (let x = 0; x < cellsPerTile; x++) {
+                const diag1 = Math.abs(x - y);
+                const diag2 = Math.abs(x + y - maxIndex);
+                const onX = diag1 <= 1 || diag2 <= 1;
+                if (!onX) continue;
+
+                let color = '#ffff00'; // Yellow base
+                if (diag1 === 0 && diag2 === 0) {
+                  color = '#ffff88'; // Brighter yellow center
+                } else if (
+                  diag1 === 1 ||
+                  diag2 === 1 ||
+                  x === 0 ||
+                  y === 0 ||
+                  x === maxIndex ||
+                  y === maxIndex
+                ) {
+                  color = '#cccc00'; // Darker yellow edges
+                }
+
+                ctx.fillStyle = color;
+                ctx.fillRect(
+                  worldX - tileSize / 2 + x * cellSize,
+                  worldY - tileSize / 2 + y * cellSize,
+                  cellSize,
+                  cellSize
+                );
+              }
+            }
           }
 
           ctx.restore();
@@ -2716,6 +2926,32 @@
           ctx.rect(bar.x + 1, bar.y + 1, Math.max(0, fillWidth - 2), bar.h - 2);
           ctx.fill();
 
+          // UI: Time and Day display (top-center, screen space)
+          if (gameState === 'playing' || gameState === 'dayEnd') {
+            ctx.font = 'bold 16px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+
+            // Convert to 12-hour format with AM/PM (no minutes)
+            let displayHour = dayTime.currentHour;
+            let ampm = 'AM';
+            if (displayHour >= 12) {
+              ampm = 'PM';
+              if (displayHour > 12) {
+                displayHour -= 12;
+              }
+            }
+            if (displayHour === 0) {
+              displayHour = 12;
+            }
+
+            const timeText = `${
+              dayTime.days[dayTime.currentDay]
+            } - ${displayHour} ${ampm}`;
+            ctx.fillStyle = '#e8eaf6';
+            ctx.fillText(timeText, canvas.width / 2, 14.5);
+          }
+
           // UI: Money counter (top-right, screen space)
           ctx.font = 'bold 16px ui-monospace, Menlo, Consolas, monospace';
           ctx.textAlign = 'right';
@@ -2840,8 +3076,8 @@
               potSize = 80; // Shorter pot
             }
 
-            // Lower the pot position (move it down to avoid text overlap)
-            const potContactY = stickTipY + 50; // Pot contacts stick even lower (was 30, now 50)
+            // Position pot slightly lower so it rests on the pole
+            const potContactY = stickTipY + 5; // Pot contacts stick slightly below tip
 
             // Ensure potType is set (fallback to 'regular' if undefined)
             if (!balancingMinigame.potType) {
@@ -2935,15 +3171,7 @@
               }
             }
 
-            // Timer text
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 72px ui-monospace, Menlo, Consolas, monospace'; // 3x bigger (24 * 3)
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            const timeText = Math.ceil(
-              balancingMinigame.timeRemaining
-            ).toString();
-            ctx.fillText(`Time: ${timeText}s`, canvas.width / 2, panelY + 20);
+            // Timer text removed
 
             // Instructions
             ctx.fillStyle = '#ffffff';
@@ -3142,51 +3370,7 @@
               Math.round(panelY + 20)
             );
 
-            // Close button (X) in top-right corner - made bigger for easier clicking
-            const closeButtonSize = 40; // Increased from typical 20-30px for easier clicking
-            const closeButtonX = panelX + panelWidth - closeButtonSize - 10;
-            const closeButtonY = panelY + 10;
-            const closeButtonPadding = 8; // Padding inside the button
-
-            // Check if mouse is hovering over close button
-            const isHoveringClose =
-              mouseX >= closeButtonX &&
-              mouseX <= closeButtonX + closeButtonSize &&
-              mouseY >= closeButtonY &&
-              mouseY <= closeButtonY + closeButtonSize;
-
-            // Draw close button background (slightly visible on hover)
-            if (isHoveringClose) {
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-              ctx.fillRect(
-                Math.round(closeButtonX),
-                Math.round(closeButtonY),
-                closeButtonSize,
-                closeButtonSize
-              );
-            }
-
-            // Draw X symbol
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(
-              closeButtonX + closeButtonPadding,
-              closeButtonY + closeButtonPadding
-            );
-            ctx.lineTo(
-              closeButtonX + closeButtonSize - closeButtonPadding,
-              closeButtonY + closeButtonSize - closeButtonPadding
-            );
-            ctx.moveTo(
-              closeButtonX + closeButtonSize - closeButtonPadding,
-              closeButtonY + closeButtonPadding
-            );
-            ctx.lineTo(
-              closeButtonX + closeButtonPadding,
-              closeButtonY + closeButtonSize - closeButtonPadding
-            );
-            ctx.stroke();
+            // Close button removed
 
             // Divide panel into two columns
             const columnWidth = (panelWidth - 60) / 2; // Leave space for divider and padding
@@ -3242,7 +3426,7 @@
             ctx.font = 'bold 24px ui-monospace, Menlo, Consolas, monospace';
             ctx.textAlign = 'center';
             ctx.fillText(
-              'Questionable authenticity',
+              'Possible fake',
               Math.round(rightX + columnWidth / 2),
               Math.round(textY - 25)
             );
@@ -3476,6 +3660,104 @@
           // Draw dialogue textbox (RPG style at top of screen)
           if (tutorial.active || shopkeeper.dialogue || oldGuy.dialogue) {
             drawDialogueBox();
+          }
+
+          // Draw day end warning (at 5 PM, bottom of screen)
+          if (
+            gameState === 'playing' &&
+            dayTime.currentHour === dayTime.warningHour
+          ) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+            ctx.fillStyle = '#ffff00';
+            ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(
+              'The day is ending',
+              canvas.width / 2,
+              canvas.height - 25
+            );
+            ctx.restore();
+          }
+
+          // Draw day end screen
+          if (gameState === 'dayEnd') {
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#e8eaf6';
+            ctx.font = 'bold 36px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(
+              'The day has ended.',
+              canvas.width / 2,
+              canvas.height / 2 - 40
+            );
+
+            ctx.font = '18px ui-monospace, Menlo, Consolas, monospace';
+            ctx.fillText(
+              'Press SPACE to continue',
+              canvas.width / 2,
+              canvas.height / 2 + 20
+            );
+            ctx.restore();
+          }
+
+          // Draw week end screen
+          if (gameState === 'weekEnd') {
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#e8eaf6';
+            ctx.font = 'bold 32px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(
+              'Your week is over, count your money.',
+              canvas.width / 2,
+              canvas.height / 2 - 100
+            );
+
+            // Calculate total money (current day's money + previous days)
+            const totalMoney = dayTime.totalMoney + money.amount;
+            ctx.font = 'bold 24px ui-monospace, Menlo, Consolas, monospace';
+            ctx.fillText(
+              `Total: $${totalMoney}`,
+              canvas.width / 2,
+              canvas.height / 2 - 40
+            );
+
+            // Determine ending
+            let endingText = '';
+            let endingColor = '#e8eaf6';
+            if (totalMoney === 0) {
+              endingText = 'Lazy';
+              endingColor = '#ff6b6b';
+            } else if (totalMoney < 2500) {
+              endingText = 'Average';
+              endingColor = '#ffd93d';
+            } else {
+              endingText = 'Rich';
+              endingColor = '#51cf66';
+            }
+
+            ctx.font = 'bold 48px ui-monospace, Menlo, Consolas, monospace';
+            ctx.fillStyle = endingColor;
+            ctx.fillText(endingText, canvas.width / 2, canvas.height / 2 + 20);
+
+            ctx.fillStyle = '#e8eaf6';
+            ctx.font = '18px ui-monospace, Menlo, Consolas, monospace';
+            ctx.fillText(
+              'Press SPACE to return to title',
+              canvas.width / 2,
+              canvas.height / 2 + 100
+            );
+            ctx.restore();
           }
         }
 
@@ -3924,12 +4206,138 @@
           ctx.restore();
         }
 
+        // Title screen rendering
+        function drawTitleScreen() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Background
+          ctx.fillStyle = '#0f1a12';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Title text
+          ctx.fillStyle = '#e8eaf6';
+          ctx.font = 'bold 48px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(
+            'Dig, Dig, Dig!',
+            canvas.width / 2,
+            canvas.height / 2 - 80
+          );
+
+          // Play button
+          const buttonX = canvas.width / 2;
+          const buttonY = canvas.height / 2 + 40;
+          const buttonWidth = 200;
+          const buttonHeight = 60;
+
+          // Check if mouse is hovering over play button
+          const isHoveringPlay =
+            mouseX >= buttonX - buttonWidth / 2 &&
+            mouseX <= buttonX + buttonWidth / 2 &&
+            mouseY >= buttonY - buttonHeight / 2 &&
+            mouseY <= buttonY + buttonHeight / 2;
+
+          // Button background (rounded rectangle) - brighter when hovering
+          ctx.fillStyle = isHoveringPlay ? '#1f2f4a' : '#15193a'; // Brighter on hover
+          ctx.strokeStyle = isHoveringPlay ? '#3b4f6f' : '#2b2f55'; // Brighter border on hover
+          ctx.lineWidth = 3;
+          const radius = 8;
+          const btnX = buttonX - buttonWidth / 2;
+          const btnY = buttonY - buttonHeight / 2;
+          ctx.beginPath();
+          ctx.moveTo(btnX + radius, btnY);
+          ctx.lineTo(btnX + buttonWidth - radius, btnY);
+          ctx.quadraticCurveTo(
+            btnX + buttonWidth,
+            btnY,
+            btnX + buttonWidth,
+            btnY + radius
+          );
+          ctx.lineTo(btnX + buttonWidth, btnY + buttonHeight - radius);
+          ctx.quadraticCurveTo(
+            btnX + buttonWidth,
+            btnY + buttonHeight,
+            btnX + buttonWidth - radius,
+            btnY + buttonHeight
+          );
+          ctx.lineTo(btnX + radius, btnY + buttonHeight);
+          ctx.quadraticCurveTo(
+            btnX,
+            btnY + buttonHeight,
+            btnX,
+            btnY + buttonHeight - radius
+          );
+          ctx.lineTo(btnX, btnY + radius);
+          ctx.quadraticCurveTo(btnX, btnY, btnX + radius, btnY);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // Button text
+          ctx.fillStyle = '#e8eaf6';
+          ctx.font = '24px ui-monospace, Menlo, Consolas, monospace';
+          ctx.fillText('PLAY', buttonX, buttonY);
+        }
+
+        // Handle mouse clicks for title screen
+        canvas.addEventListener('click', (e) => {
+          if (gameState === 'title') {
+            const rect = canvas.getBoundingClientRect();
+            // Account for canvas scaling - convert display coordinates to internal canvas coordinates
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            // Check if click is on play button
+            const buttonX = canvas.width / 2;
+            const buttonY = canvas.height / 2 + 40;
+            const buttonWidth = 200;
+            const buttonHeight = 60;
+
+            if (
+              x >= buttonX - buttonWidth / 2 &&
+              x <= buttonX + buttonWidth / 2 &&
+              y >= buttonY - buttonHeight / 2 &&
+              y <= buttonY + buttonHeight / 2
+            ) {
+              // Initialize day/time system for new game
+              dayTime.currentDay = 0;
+              dayTime.currentHour = 8;
+              dayTime.currentMinute = 0;
+              dayTime.timeInSeconds = 0;
+              dayTime.totalMoney = 0;
+              money.amount = 0;
+
+              // Reset player position
+              player.x = world.width / 2;
+              player.y = world.height - 40;
+              player.vx = 0;
+              player.vy = 0;
+
+              // Reset camera
+              camera.x = player.x;
+              camera.y = player.y;
+
+              gameState = 'playing';
+              e.stopPropagation(); // Prevent other handlers from processing
+            }
+          }
+        });
+
         let lastTime = performance.now();
         function loop(now) {
           const dt = Math.min(33, now - lastTime);
           lastTime = now;
-          update(dt);
-          render();
+
+          if (gameState === 'title') {
+            drawTitleScreen();
+          } else {
+            update(dt);
+            render();
+          }
+
           requestAnimationFrame(loop);
         }
 
