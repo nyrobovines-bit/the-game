@@ -46,7 +46,9 @@
         border: 1px solid #2b2f55;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35),
           inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+        image-rendering: -moz-crisp-edges;
         image-rendering: pixelated;
+        image-rendering: crisp-edges;
         max-width: 100%;
         height: 100%;
         width: auto;
@@ -86,6 +88,7 @@
       (function () {
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false; // Disable smoothing for crisp pixel art
 
         const world = {
           width: 2400,
@@ -236,7 +239,6 @@
             'Saturday',
             'Sunday',
           ],
-          totalMoney: 0, // Track total money earned across the week
         };
 
         const tileSize = 32;
@@ -354,7 +356,6 @@
           breakTimer: 0,
           pieces: [],
           isSecretX: false, // Track if this minigame came from a secret X tile
-          isPurpleX: false, // Track if this minigame came from a purple X tile
         };
 
         const brushingMinigame = {
@@ -377,7 +378,6 @@
           completed: false,
           broken: false,
           isSecretX: false, // Track if this minigame came from a secret X tile
-          isPurpleX: false, // Track if this minigame came from a purple X tile
         };
 
         const declarationMinigame = {
@@ -394,7 +394,6 @@
           wasCorrect: false,
           actualReward: 0,
           isSecretX: false, // Track if this minigame came from a secret X tile
-          isPurpleX: false, // Track if this minigame came from a purple X tile
         };
 
         // Optimize sprite loading: set imageSmoothingEnabled before src for faster rendering
@@ -430,10 +429,6 @@
         dirtSprite.imageSmoothingEnabled = false;
         dirtSprite.src = 'assets/sprites/dirt.png';
 
-        const moneyBorderSprite = new Image();
-        moneyBorderSprite.imageSmoothingEnabled = false;
-        moneyBorderSprite.src = 'assets/sprites/money_border.png';
-
         const grassSprite = new Image();
         grassSprite.imageSmoothingEnabled = false;
         grassSprite.src = 'assets/sprites/Grass.png';
@@ -458,13 +453,13 @@
         yellowXSprite.imageSmoothingEnabled = false;
         yellowXSprite.src = 'assets/sprites/Yellow_X.png';
 
-        const purpleXSprite = new Image();
-        purpleXSprite.imageSmoothingEnabled = false;
-        purpleXSprite.src = 'assets/sprites/Purple_X.png';
-
         const newBushSprite = new Image();
         newBushSprite.imageSmoothingEnabled = false;
         newBushSprite.src = 'assets/sprites/New_Bush.png';
+
+        const tallGrassSprite = new Image();
+        tallGrassSprite.imageSmoothingEnabled = false;
+        tallGrassSprite.src = 'assets/sprites/Tall_Grass.png';
 
         // Function to regenerate tiles that use sprites (optimized - only regenerates when needed)
         // Deferred to avoid blocking the main thread during load
@@ -484,7 +479,7 @@
               'rockCluster',
               'redX',
               'secretX',
-              'purpleX',
+              'logRows',
             ];
 
             for (let row = 0; row < tileRows; row++) {
@@ -544,6 +539,11 @@
           regenerateTiles();
         };
 
+        // Regenerate tiles when tall grass sprite loads (deferred)
+        tallGrassSprite.onload = function () {
+          regenerateTiles();
+        };
+
         // If sprite is already loaded (cached), regenerate tiles immediately
         if (grassSprite.complete && grassSprite.naturalWidth > 0) {
           // Sprite already loaded, but tiles haven't been created yet
@@ -554,10 +554,6 @@
         const oldGuySprite = new Image();
         oldGuySprite.imageSmoothingEnabled = false;
         oldGuySprite.src = 'assets/sprites/oldguy.png';
-
-        const shopkeeperSprite = new Image();
-        shopkeeperSprite.imageSmoothingEnabled = false; // Pixelated rendering
-        shopkeeperSprite.src = 'assets/sprites/shopkeeper.png';
 
         const curatorSprite = new Image();
         curatorSprite.imageSmoothingEnabled = false;
@@ -570,6 +566,15 @@
         const chocolateBarSprite = new Image();
         chocolateBarSprite.imageSmoothingEnabled = false;
         chocolateBarSprite.src = 'assets/sprites/Chocolate_Bar.png';
+
+        // Minigame reward sprites
+        const bulletsSprite = new Image();
+        bulletsSprite.imageSmoothingEnabled = false;
+        bulletsSprite.src = 'assets/sprites/Bullets.png';
+
+        const grapeshotSprite = new Image();
+        grapeshotSprite.imageSmoothingEnabled = false;
+        grapeshotSprite.src = 'assets/sprites/Grapeshot.png';
 
         // Museum sprites
         const floorTileSprite = new Image();
@@ -631,13 +636,28 @@
         };
 
         function createTileCanvas(drawFn) {
+          // Create canvas with 1px overlap to eliminate seams between tiles
+          // This technique ensures tiles can overlap slightly without stretching
+          const overlap = 1;
           const buffer = document.createElement('canvas');
-          buffer.width = tileSize;
-          buffer.height = tileSize;
+          buffer.width = tileSize + overlap;
+          buffer.height = tileSize + overlap;
           const bctx = buffer.getContext('2d');
           // Disable image smoothing for pixel art
           bctx.imageSmoothingEnabled = false;
+          // Draw the tile content (drawFn draws in the tileSize x tileSize area)
           drawFn(bctx);
+          // Copy the rightmost column (column tileSize - 1) to the overlap column (column tileSize)
+          // This creates seamless tiling: when adjacent tiles are drawn, they overlap by 1px
+          // The rightmost pixel of each tile is the same as the leftmost visible pixel of the next tile
+          const rightEdge = bctx.getImageData(tileSize - 1, 0, 1, tileSize);
+          bctx.putImageData(rightEdge, tileSize, 0);
+          // Copy the bottommost row (row tileSize - 1) to the overlap row (row tileSize)
+          const bottomEdge = bctx.getImageData(0, tileSize - 1, tileSize, 1);
+          bctx.putImageData(bottomEdge, 0, tileSize);
+          // Copy the corner pixel for the bottom-right overlap
+          const corner = bctx.getImageData(tileSize - 1, tileSize - 1, 1, 1);
+          bctx.putImageData(corner, tileSize, tileSize);
           return buffer;
         }
 
@@ -762,46 +782,18 @@
             name: 'logRows',
             weight: 5,
             draw(ctx) {
-              // Always use grass sprite (only draw if loaded)
+              // Always use grass sprite as base (only draw if loaded)
               ctx.imageSmoothingEnabled = false;
               if (grassSprite.complete && grassSprite.naturalWidth > 0) {
                 ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
               }
-              const startX = tileCell;
-              const width = tileCell * 6;
-              const logHeight = tileCell * 2;
-              const spacing = tileCell * 2;
-              for (let i = 0; i < 2; i++) {
-                const y = tileCell + i * (logHeight + spacing);
-                ctx.fillStyle = colors.outline;
-                ctx.fillRect(startX, y, width, logHeight);
-                ctx.fillStyle = colors.logDark;
-                ctx.fillRect(
-                  startX + tileCell,
-                  y + tileCell / 2,
-                  width - tileCell * 2,
-                  logHeight - tileCell
-                );
-                ctx.fillStyle = colors.logLight;
-                ctx.fillRect(
-                  startX + tileCell,
-                  y + tileCell / 2,
-                  width - tileCell * 2,
-                  logHeight - tileCell * 1.5
-                );
-                for (
-                  let notch = startX + tileCell;
-                  notch < startX + width - tileCell;
-                  notch += tileCell * 1.5
-                ) {
-                  ctx.fillStyle = colors.logShadow;
-                  ctx.fillRect(
-                    notch,
-                    y + tileCell / 2,
-                    tileCell / 2,
-                    logHeight - tileCell
-                  );
-                }
+              // Draw tall grass sprite instead of logs
+              // Position tall grass sprite in the center of the tile
+              if (
+                tallGrassSprite.complete &&
+                tallGrassSprite.naturalWidth > 0
+              ) {
+                ctx.drawImage(tallGrassSprite, 0, 0, tileSize, tileSize);
               }
             },
           },
@@ -833,22 +825,6 @@
               // Draw yellow X sprite (visible for testing colors)
               if (yellowXSprite.complete && yellowXSprite.naturalWidth > 0) {
                 ctx.drawImage(yellowXSprite, 0, 0, tileSize, tileSize);
-              }
-            },
-          },
-          {
-            name: 'purpleX',
-            weight: 1, // Half as common as secretX (which is 2)
-            draw(ctx) {
-              // Always use grass sprite (only draw if loaded)
-              // Purple X tiles - show grass with purple X pattern (visible for testing)
-              ctx.imageSmoothingEnabled = false;
-              if (grassSprite.complete && grassSprite.naturalWidth > 0) {
-                ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
-              }
-              // Draw purple X sprite (visible for testing colors)
-              if (purpleXSprite.complete && purpleXSprite.naturalWidth > 0) {
-                ctx.drawImage(purpleXSprite, 0, 0, tileSize, tileSize);
               }
             },
           },
@@ -898,23 +874,18 @@
             for (let col = 0; col < tileCols; col++) {
               let def = pickTileDefinition();
 
-              // If redX, secretX, or purpleX tile was picked and there's a tree at this position, replace with grass
+              // If redX or secretX tile was picked and there's a tree at this position, replace with grass
               if (
-                (def.name === 'redX' ||
-                  def.name === 'secretX' ||
-                  def.name === 'purpleX') &&
+                (def.name === 'redX' || def.name === 'secretX') &&
                 isTreeAtTile(row, col)
               ) {
                 def = tileDefinitions.find((d) => d.name === 'grass');
               }
 
-              // Generate random rotation for grass tiles (0, 90, 180, or 270 degrees)
+              // No rotation for grass tiles to ensure seamless tiling
+              // Random rotations cause adjacent tiles to have mismatched edges, creating visible seams
+              // Keeping all grass tiles at 0° rotation ensures edges align perfectly
               let grassRotation = 0;
-              if (def.name === 'grass') {
-                grassRotation = [0, 90, 180, 270][
-                  Math.floor(Math.random() * 4)
-                ];
-              }
 
               newTileMap[row][col] = {
                 name: def.name,
@@ -991,108 +962,11 @@
           };
         }
 
-        // Money system
-        const money = {
-          amount: 10000, // Starting money for testing
-        };
-
         // Game over state
         const gameOver = {
           active: false,
           message:
             'Your museum lost funding after displaying too many fakes. Try again!',
-        };
-
-        // Shop system
-        const shop = {
-          open: false,
-          currentTab: 0, // 0 = Shovels, 1 = Equipment
-          tabs: [
-            {
-              name: 'Multipliers',
-              items: [
-                {
-                  name: 'Simple trowel',
-                  tier: 1,
-                  price: 25,
-                  type: 'shovel',
-                  purchased: false,
-                },
-                {
-                  name: 'Electric brush',
-                  tier: 2,
-                  price: 200,
-                  type: 'shovel',
-                  purchased: false,
-                },
-                {
-                  name: 'Iron Sieve',
-                  tier: 3,
-                  price: 350,
-                  type: 'shovel',
-                  purchased: false,
-                },
-                {
-                  name: 'Extra Hand',
-                  tier: 4,
-                  price: 500,
-                  type: 'shovel',
-                  purchased: false,
-                },
-                {
-                  name: 'Master Precision',
-                  tier: 5,
-                  price: 2000,
-                  type: 'shovel',
-                  purchased: false,
-                },
-              ],
-            },
-            {
-              name: 'Equipment',
-              items: [
-                { name: 'Radar', tier: 0, price: 0, type: 'equipment' }, // $0 for testing
-                { name: 'Speed Brush', tier: 0, price: 200, type: 'equipment' },
-                {
-                  name: 'Artifact shovel',
-                  tier: 6,
-                  price: 100,
-                  type: 'shovel',
-                  description: 'Allows digging purple X spots',
-                },
-                {
-                  name: 'Artifact spade',
-                  tier: 6,
-                  price: 50,
-                  type: 'shovel',
-                  description: 'Allows digging purple X spots',
-                },
-                {
-                  name: 'Artifact scoop',
-                  tier: 6,
-                  price: 250,
-                  type: 'shovel',
-                  description: 'Allows digging purple X spots',
-                },
-              ],
-            },
-          ],
-          get items() {
-            return this.tabs[this.currentTab].items;
-          },
-        };
-
-        // Shopkeeper NPC
-        const shopkeeper = {
-          x: world.width - 100,
-          y: world.height - 100,
-          radius: 20,
-          dialogue: null, // Current dialogue text
-          dialogueStage: 0, // 0 = none, 1 = "Hello", 2 = "What would you like?"
-          dialogueTimer: 0,
-          hasTalkedOnce: false, // Track if player has talked to shopkeeper once with money
-          hasBoughtFirstItem: false, // Track if player has bought their first item
-          hasShownInventoryMessage: false, // Track if inventory message has been shown (only show once)
         };
 
         // System message (no character name, skippable)
@@ -1152,7 +1026,6 @@
           equipment: null, // 1 equipment slot
           chocolateBarCount: 0, // Track chocolate bars (stored in equipment slot, not inventory)
           speedBrush: false, // Track if Speed Brush is owned (equipment slot only, not inventory)
-          artifactEquipment: null, // Currently equipped artifact tool (spade, shovel, or scoop)
         };
 
         // Candybar boost system
@@ -1203,24 +1076,6 @@
               if (vendingMachine.open) {
                 vendingMachine.open = false;
               }
-              // Close shop if open
-              if (shop.open) {
-                shop.open = false;
-                // If player has bought first item and hasn't seen inventory message, show it once
-                if (
-                  shopkeeper.hasBoughtFirstItem &&
-                  !shopkeeper.hasShownInventoryMessage
-                ) {
-                  shopkeeper.dialogue =
-                    "Press E to open your inventory to see the items you've bought!";
-                  shopkeeper.dialogueStage = 1;
-                  shopkeeper.dialogueTimer = 0;
-                  shopkeeper.hasShownInventoryMessage = true; // Mark as shown
-                } else {
-                  shopkeeper.dialogue = null;
-                  shopkeeper.dialogueStage = 0;
-                }
-              }
               const wasOpen = inventory.open;
               inventory.open = !inventory.open;
               // Kill momentum when opening inventory
@@ -1248,26 +1103,6 @@
                 player.vx = 0;
                 player.vy = 0;
               }
-              // If shop is open, close it
-              else if (shop.open) {
-                shop.open = false;
-                // If player has bought first item and hasn't seen inventory message, show it once
-                if (
-                  shopkeeper.hasBoughtFirstItem &&
-                  !shopkeeper.hasShownInventoryMessage
-                ) {
-                  shopkeeper.dialogue =
-                    "Press E to open your inventory to see the items you've bought!";
-                  shopkeeper.dialogueStage = 1;
-                  shopkeeper.dialogueTimer = 0;
-                  shopkeeper.hasShownInventoryMessage = true; // Mark as shown
-                } else {
-                  shopkeeper.dialogue = null;
-                  shopkeeper.dialogueStage = 0;
-                }
-                player.vx = 0;
-                player.vy = 0;
-              }
               // If dialogue is showing, close it
               // Skip tutorial check in museum state (tutorial doesn't apply there)
               else if (tutorial.active && gameState !== 'museum') {
@@ -1276,7 +1111,6 @@
                 player.vy = 0;
               } else if (
                 systemMessage.text ||
-                shopkeeper.dialogue ||
                 oldGuy.dialogue ||
                 candyKid.dialogue ||
                 curator.dialogue
@@ -1284,17 +1118,6 @@
                 // System messages can always be closed with spacebar
                 if (systemMessage.text) {
                   systemMessage.text = null;
-                } else if (shopkeeper.dialogue) {
-                  // Skip dialogue if it's the inventory message (just close it)
-                  if (
-                    shopkeeper.dialogue ===
-                    "Press E to open your inventory to see the items you've bought!"
-                  ) {
-                    shopkeeper.dialogue = null;
-                    shopkeeper.dialogueStage = 0;
-                  } else {
-                    advanceShopkeeperDialogue();
-                  }
                 } else if (oldGuy.dialogue) {
                   advanceOldGuyDialogue(); // Advance through dialogue stages
                   player.vx = 0;
@@ -1363,8 +1186,6 @@
               dayTime.currentDay = 0; // Start on Monday
               dayTime.currentHour = 8; // Start at 8:00 AM
               dayTime.hourTimer = 0;
-              dayTime.totalMoney = 0;
-              money.amount = 0;
               return;
             }
 
@@ -1373,7 +1194,6 @@
               e.preventDefault();
               // Reset game state
               gameOver.active = false;
-              money.amount = 0;
               // Reset player position
               player.x = world.width / 2;
               player.y = world.height - 40;
@@ -1494,65 +1314,6 @@
             }
 
             // Close button removed
-          }
-
-          // Shop menu click handling
-          if (shop.open) {
-            const shopWidth = 400;
-            const itemHeight = 50;
-            const itemPadding = 10;
-            const titleHeight = 40;
-            const tabHeight = 30;
-            const instructionsHeight = 25;
-            const topPadding = 15;
-            const bottomPadding = 15;
-            const shopHeight =
-              titleHeight +
-              tabHeight +
-              topPadding +
-              shop.items.length * itemHeight +
-              (shop.items.length - 1) * itemPadding +
-              bottomPadding +
-              instructionsHeight;
-            const shopX = Math.round(canvas.width / 2 - shopWidth / 2) + 0.5;
-            const shopY = Math.round(canvas.height / 2 - shopHeight / 2) + 0.5;
-
-            // Check if clicking on tabs
-            const tabWidth = shopWidth / shop.tabs.length;
-            for (let i = 0; i < shop.tabs.length; i++) {
-              const tabX = shopX + i * tabWidth;
-              const tabY = shopY + titleHeight;
-              if (
-                x >= tabX &&
-                x <= tabX + tabWidth &&
-                y >= tabY &&
-                y <= tabY + tabHeight
-              ) {
-                shop.currentTab = i;
-                return;
-              }
-            }
-
-            // Check if clicking on items
-            const startY = shopY + titleHeight + tabHeight + topPadding;
-            for (let i = 0; i < shop.items.length; i++) {
-              const item = shop.items[i];
-              const itemY = startY + i * (itemHeight + itemPadding);
-              const itemRectX = shopX + 20;
-              const itemRectY = itemY;
-              const itemRectW = shopWidth - 40;
-              const itemRectH = itemHeight;
-
-              if (
-                x >= itemRectX &&
-                x <= itemRectX + itemRectW &&
-                y >= itemRectY &&
-                y <= itemRectY + itemRectH
-              ) {
-                purchaseItem(i);
-                return;
-              }
-            }
           }
 
           // Vending machine menu click handling
@@ -1761,9 +1522,6 @@
 
         // Function to start a new day
         function startNewDay() {
-          // Add current day's money to total
-          dayTime.totalMoney += money.amount;
-
           // Move to next day
           dayTime.currentDay++;
 
@@ -2018,10 +1776,8 @@
           if (
             gameState === 'playing' &&
             !inventory.open &&
-            !shop.open &&
             !vendingMachine.open &&
             !systemMessage.text &&
-            !shopkeeper.dialogue &&
             !oldGuy.dialogue &&
             !tutorial.active &&
             !crouchAnimation.active &&
@@ -2088,7 +1844,6 @@
             player.y += player.vy;
 
             resolveTreeCollisions();
-            resolveShopkeeperCollision();
             resolveOldGuyCollision();
             resolveCandyKidCollision();
             resolveVendingMachineCollision();
@@ -2265,7 +2020,7 @@
         }
 
         function drawTiles() {
-          ctx.save();
+          // No ctx.save()/restore() here - transform is already applied in render()
           // Viewport culling: only draw tiles visible on screen
           const viewLeft = camera.x - canvas.width / 2;
           const viewTop = camera.y - canvas.height / 2;
@@ -2287,21 +2042,21 @@
             for (let col = startCol; col <= endCol; col++) {
               const tile = tileMap[row][col];
               if (tile && tile.canvas) {
-                // Draw tiles at exact integer pixel positions to prevent seams
-                // Add 1px overlap to eliminate gaps between tiles
-                const tileX = Math.floor(col * tileSize);
-                const tileY = Math.floor(row * tileSize);
-                ctx.drawImage(
-                  tile.canvas,
-                  tileX,
-                  tileY,
-                  tileSize + 1,
-                  tileSize + 1
-                );
+                // Draw tiles at exact integer world positions
+                // Tile canvas is 33x33 (tileSize + 1) with 1px overlap on right and bottom
+                // Tiles drawn at col * tileSize will naturally overlap:
+                // - Tile at col=0: drawn at x=0, covers x=0 to x=32 (33px)
+                // - Tile at col=1: drawn at x=32, covers x=32 to x=64 (33px)
+                // - Overlap at x=32 ensures seamless edges
+                // World positions are always multiples of tileSize (32), so they're integers
+                // The camera transform (already applied) converts these to screen coordinates
+                // Camera position is rounded, so screen positions should align to pixel boundaries
+                const tileX = col * tileSize;
+                const tileY = row * tileSize;
+                ctx.drawImage(tile.canvas, tileX, tileY);
               }
             }
           }
-          ctx.restore();
         }
 
         function resolveTreeCollisions() {
@@ -2331,23 +2086,6 @@
               player.x += dx * invDist * overlap;
               player.y += dy * invDist * overlap;
             }
-          }
-        }
-
-        function resolveShopkeeperCollision() {
-          const playerRadius = player.radius; // Use cached radius
-          const dx = player.x - shopkeeper.x;
-          const dy = player.y - shopkeeper.y;
-          const distSq = dx * dx + dy * dy;
-          const minDist = shopkeeper.radius + playerRadius;
-          const minDistSq = minDist * minDist;
-
-          if (distSq < minDistSq && distSq > 0) {
-            const dist = Math.sqrt(distSq);
-            const overlap = minDist - dist;
-            const invDist = 1 / dist; // Cache inverse distance
-            player.x += dx * invDist * overlap;
-            player.y += dy * invDist * overlap;
           }
         }
 
@@ -2416,42 +2154,6 @@
             const invDist = 1 / dist; // Cache inverse distance
             player.x += dx * invDist * overlap;
             player.y += dy * invDist * overlap;
-          }
-        }
-
-        function advanceShopkeeperDialogue() {
-          if (shopkeeper.dialogueStage === 1) {
-            // After "Hello!", check if player has money
-            if (money.amount > 0) {
-              // Player has money - show shop message first time, or "What would you like?" if already talked
-              if (shopkeeper.hasTalkedOnce) {
-                shopkeeper.dialogue = 'What would you like?';
-                shopkeeper.dialogueStage = 2;
-              } else {
-                shopkeeper.dialogue =
-                  'I see you have some cash on you. You can buy shovels from my shop for extra cash, or a radar to find hidden objects.';
-                shopkeeper.dialogueStage = 2;
-                shopkeeper.hasTalkedOnce = true; // Mark that we've talked once
-              }
-            } else {
-              // Player has no money - tell them to go dig
-              shopkeeper.dialogue =
-                "Looks like you don't have any money on you. Go and dig up some artifacts, then we can talk.";
-              shopkeeper.dialogueStage = 3; // Set to 3 so dialogue closes on next press
-            }
-          } else if (shopkeeper.dialogueStage === 2) {
-            // After the shop message (only if player has money), open shop menu
-            // Close inventory if open
-            if (inventory.open) {
-              inventory.open = false;
-            }
-            shop.open = true;
-            shopkeeper.dialogue = null;
-            shopkeeper.dialogueStage = 0;
-          } else if (shopkeeper.dialogueStage === 3) {
-            // Close dialogue after "no money" message
-            shopkeeper.dialogue = null;
-            shopkeeper.dialogueStage = 0;
           }
         }
 
@@ -2525,7 +2227,7 @@
             // Player has no artifacts - three stages (0, 1, 2)
             if (curator.dialogueStage === 1) {
               curator.dialogue =
-                "Dig up the Purple X's with your shovel to get one!";
+                "Dig up the X's with your shovel to get artifacts!";
             } else if (curator.dialogueStage >= 2) {
               curator.dialogue = null;
               curator.dialogueStage = 0;
@@ -2540,12 +2242,7 @@
           }
 
           // Don't start new dialogue if one is already showing
-          if (
-            shopkeeper.dialogue ||
-            oldGuy.dialogue ||
-            candyKid.dialogue ||
-            curator.dialogue
-          ) {
+          if (oldGuy.dialogue || candyKid.dialogue || curator.dialogue) {
             return;
           }
 
@@ -2650,24 +2347,6 @@
             return;
           }
 
-          // Check if player is touching shopkeeper (collision-based)
-          dx = player.x - shopkeeper.x;
-          dy = player.y - shopkeeper.y;
-          distSq = dx * dx + dy * dy;
-          minDist = shopkeeper.radius + playerRadius;
-          minDistSq = minDist * minDist;
-
-          // Allow interaction when very close (within collision distance + small buffer)
-          if (distSq <= minDistSq * 1.2) {
-            shopkeeper.dialogue = "Go find some X's to dig for cash";
-            shopkeeper.dialogueStage = 1;
-            shopkeeper.dialogueTimer = 0; // Don't auto-close, wait for Spacebar press
-            // Kill momentum when opening dialogue
-            player.vx = 0;
-            player.vy = 0;
-            return;
-          }
-
           // Check if player is on a tile (any tile triggers crouch animation)
           // Only allow digging in 'playing' state (not in museum or other states)
           if (gameState !== 'playing') {
@@ -2686,29 +2365,8 @@
                 crouchAnimation.active = true;
                 crouchAnimation.timer = 0;
                 crouchAnimation.particles = []; // Initialize particles array
-                // Only store minigame if on red X, secret X, or purple X tile, otherwise just play animation
-                // Purple X requires artifact equipment (Artifact shovel, Artifact spade, or Artifact scoop)
-                if (tile.name === 'purpleX') {
-                  // Check if player has artifact equipment equipped
-                  if (!inventory.artifactEquipment) {
-                    // Player doesn't have artifact equipment - show system message
-                    systemMessage.text =
-                      'You need some kind of artifact equipment for that!';
-                    crouchAnimation.active = false;
-                    return;
-                  }
-                  // Player has the right shovel - treat like redX
-                  const minigameRoll = Math.random();
-                  if (minigameRoll < 0.4) {
-                    crouchAnimation.pendingMinigame = 'balancing';
-                  } else if (minigameRoll < 0.8) {
-                    crouchAnimation.pendingMinigame = 'declaration';
-                  } else {
-                    crouchAnimation.pendingMinigame = 'brushing';
-                  }
-                  crouchAnimation.isSecretX = false; // Purple X acts like regular X
-                  crouchAnimation.isPurpleX = true; // Track that this is a purple X tile
-                } else if (tile.name === 'redX' || tile.name === 'secretX') {
+                // Only store minigame if on red X or secret X tile, otherwise just play animation
+                if (tile.name === 'redX' || tile.name === 'secretX') {
                   // Store which minigame to start after animation
                   // Probabilities: 40% balancing (pots), 40% declaration (typo), 20% brushing
                   const minigameRoll = Math.random();
@@ -2721,12 +2379,10 @@
                   }
                   // Store whether this is a secret X tile for later reward multiplier
                   crouchAnimation.isSecretX = tile.name === 'secretX';
-                  crouchAnimation.isPurpleX = false;
                 } else {
                   // No minigame for other tiles
                   crouchAnimation.pendingMinigame = null;
                   crouchAnimation.isSecretX = false;
-                  crouchAnimation.isPurpleX = false;
                 }
                 // Stop player movement during crouch animation
                 player.vx = 0;
@@ -2735,6 +2391,43 @@
               return;
             }
           }
+        }
+
+        // Helper function to add items to inventory when minigames complete
+        // This function finds the first empty slot and adds the item there
+        function addItemToInventory(itemName, sprite) {
+          // Find first empty inventory slot
+          for (let i = 0; i < inventory.slots.length; i++) {
+            if (inventory.slots[i] === null) {
+              // Empty slot found, add the item
+              inventory.slots[i] = {
+                name: itemName,
+                sprite: sprite,
+              };
+              return true; // Successfully added
+            }
+          }
+          // No empty slots available
+          return false; // Inventory full
+        }
+
+        // Function to give minigame reward (randomly chooses bullets or grapeshot)
+        function giveMinigameReward() {
+          // Randomly choose between bullets (50%) or grapeshot (50%)
+          const rewardType = Math.random() < 0.5 ? 'bullets' : 'grapeshot';
+
+          if (rewardType === 'bullets') {
+            // Give bullets if sprite is loaded and inventory has space
+            if (bulletsSprite.complete && bulletsSprite.naturalWidth > 0) {
+              return addItemToInventory('Bullets', bulletsSprite);
+            }
+          } else {
+            // Give grapeshot if sprite is loaded and inventory has space
+            if (grapeshotSprite.complete && grapeshotSprite.naturalWidth > 0) {
+              return addItemToInventory('Grapeshot', grapeshotSprite);
+            }
+          }
+          return false; // Failed to add reward (inventory full or sprite not loaded)
         }
 
         // Function to start the actual minigame after crouch animation completes
@@ -2782,7 +2475,6 @@
             brushingMinigame.tileRow = row;
             brushingMinigame.tileCol = col;
             brushingMinigame.isSecretX = crouchAnimation.isSecretX;
-            brushingMinigame.isPurpleX = crouchAnimation.isPurpleX || false;
             brushingMinigame.dirtLevel = 1.0;
             brushingMinigame.redness = 0;
             brushingMinigame.timeHoldingSpace = 0;
@@ -2811,7 +2503,6 @@
             declarationMinigame.tileRow = row;
             declarationMinigame.tileCol = col;
             declarationMinigame.isSecretX = crouchAnimation.isSecretX;
-            declarationMinigame.isPurpleX = crouchAnimation.isPurpleX || false;
             declarationMinigame.answered = false;
 
             // 50% chance the test excerpt is fake (has typos)
@@ -2977,9 +2668,6 @@
               if (balancingMinigame.isSecretX) {
                 multiplier *= 1.5;
               }
-              money.amount += Math.round(
-                balancingMinigame.baseReward * multiplier
-              );
               const grassDef = tileDefinitions.find(
                 (def) => def.name === 'grass'
               );
@@ -3027,9 +2715,10 @@
             if (balancingMinigame.isSecretX) {
               multiplier *= 1.5;
             }
-            money.amount += Math.round(
-              balancingMinigame.baseReward * multiplier
-            );
+
+            // Give minigame reward (bullets or grapeshot)
+            giveMinigameReward();
+
             const grassDef = tileDefinitions.find(
               (def) => def.name === 'grass'
             );
@@ -3050,23 +2739,6 @@
                     pos.col === balancingMinigame.tileCol
                   )
               );
-            }
-            // Consume artifact equipment if this was a purple X tile
-            if (balancingMinigame.isPurpleX && inventory.artifactEquipment) {
-              inventory.artifactEquipment = null;
-              // Remove from discovered purple X list
-              if (
-                balancingMinigame.tileRow !== null &&
-                balancingMinigame.tileCol !== null
-              ) {
-                radar.discoveredPurpleX = radar.discoveredPurpleX.filter(
-                  (pos) =>
-                    !(
-                      pos.row === balancingMinigame.tileRow &&
-                      pos.col === balancingMinigame.tileCol
-                    )
-                );
-              }
             }
             balancingMinigame.active = false;
           }
@@ -3231,9 +2903,11 @@
             if (brushingMinigame.isSecretX) {
               multiplier *= 1.5;
             }
-            money.amount += Math.round(
-              brushingMinigame.baseReward * multiplier
-            );
+
+            // Give minigame reward (bullets or grapeshot) when completed successfully
+            if (brushingMinigame.completed) {
+              giveMinigameReward();
+            }
 
             // Convert tile to grass
             const grassDef = tileDefinitions.find(
@@ -3256,23 +2930,6 @@
                     pos.col === brushingMinigame.tileCol
                   )
               );
-            }
-            // Consume artifact equipment if this was a purple X tile
-            if (brushingMinigame.isPurpleX && inventory.artifactEquipment) {
-              inventory.artifactEquipment = null;
-              // Remove from discovered purple X list
-              if (
-                brushingMinigame.tileRow !== null &&
-                brushingMinigame.tileCol !== null
-              ) {
-                radar.discoveredPurpleX = radar.discoveredPurpleX.filter(
-                  (pos) =>
-                    !(
-                      pos.row === brushingMinigame.tileRow &&
-                      pos.col === brushingMinigame.tileCol
-                    )
-                );
-              }
             }
 
             brushingMinigame.active = false;
@@ -3321,22 +2978,20 @@
             actualReward = Math.round(
               declarationMinigame.baseReward * multiplier
             );
-            money.amount += actualReward;
           } else if (calledRealFake) {
             // Called a real document fake: no penalty, no reward (neutral)
             actualReward = 0;
           } else {
-            // Wrong answer (called fake document real): -$30 (no shovel multiplier)
-            actualReward = -declarationMinigame.penalty;
-            money.amount -= declarationMinigame.penalty;
+            // Wrong answer (called fake document real): no penalty
+            actualReward = 0;
           }
 
           // Store actual reward for display
           declarationMinigame.actualReward = actualReward;
 
-          // Check for game over (negative cash)
-          if (money.amount < 0) {
-            gameOver.active = true;
+          // Give minigame reward (bullets or grapeshot) when answered correctly
+          if (isCorrect) {
+            giveMinigameReward();
           }
 
           // Convert tile to grass
@@ -3360,23 +3015,6 @@
                 )
             );
           }
-          // Consume artifact equipment if this was a purple X tile
-          if (declarationMinigame.isPurpleX && inventory.artifactEquipment) {
-            inventory.artifactEquipment = null;
-            // Remove from discovered purple X list
-            if (
-              declarationMinigame.tileRow !== null &&
-              declarationMinigame.tileCol !== null
-            ) {
-              radar.discoveredPurpleX = radar.discoveredPurpleX.filter(
-                (pos) =>
-                  !(
-                    pos.row === declarationMinigame.tileRow &&
-                    pos.col === declarationMinigame.tileCol
-                  )
-              );
-            }
-          }
 
           // Close minigame after a short delay to show result
           setTimeout(() => {
@@ -3394,7 +3032,6 @@
           // Don't fire radar while in any menu
           if (
             inventory.open ||
-            shop.open ||
             (typeof vendingMachine !== 'undefined' && vendingMachine.open)
           ) {
             return;
@@ -3438,8 +3075,6 @@
                 maxLife: 3.0, // Ring lasts 3 seconds
                 foundSecretX: false, // Whether this ring found a secret X
                 secretXPos: null, // Position of found secret X
-                foundPurpleX: false, // Whether this ring found a purple X
-                purpleXPos: null, // Position of found purple X
               });
               radar.ringTimer = 0; // Reset timer
             }
@@ -3489,23 +3124,6 @@
                   );
                   if (!alreadyDiscovered) {
                     radar.discoveredSecretX.push({
-                      row: ringRow,
-                      col: ringCol,
-                    });
-                  }
-                }
-                // Check for purple X
-                if (tile && tile.name === 'purpleX') {
-                  // Found a purple X! Make ring return to player
-                  ring.foundPurpleX = true;
-                  ring.purpleXPos = { x: ring.x, y: ring.y };
-
-                  // Mark this purple X as discovered (avoid duplicates)
-                  const alreadyDiscovered = radar.discoveredPurpleX.some(
-                    (pos) => pos.row === ringRow && pos.col === ringCol
-                  );
-                  if (!alreadyDiscovered) {
-                    radar.discoveredPurpleX.push({
                       row: ringRow,
                       col: ringCol,
                     });
@@ -3585,18 +3203,19 @@
           speedBrushSprite,
           candyKidSprite,
           dirtSprite,
-          moneyBorderSprite,
           grassSprite,
           flowerSprite,
           rock1Sprite,
           rock2Sprite,
           newXSprite,
           newBushSprite,
+          tallGrassSprite,
           oldGuySprite,
-          shopkeeperSprite,
           curatorSprite,
           vendingMachineSprite,
           chocolateBarSprite,
+          bulletsSprite,
+          grapeshotSprite,
           floorTileSprite,
           wallTileSprite,
           wallDoorSprite,
@@ -3624,7 +3243,6 @@
           ringTimer: 0, // Timer for next ring
           rings: [], // Active radar rings
           discoveredSecretX: [], // Array of discovered secret X positions {row, col}
-          discoveredPurpleX: [], // Array of discovered purple X positions {row, col}
           lastDirection: { x: 0, y: -1 }, // Last movement direction (default: up)
           lastSpriteDirection: 'up', // Last sprite direction: 'up', 'down', 'left', 'right'
         };
@@ -3698,65 +3316,6 @@
               );
             }
             ctx.restore();
-          }
-
-          ctx.restore();
-        }
-
-        function drawShopkeeper() {
-          ctx.save();
-
-          // Draw shopkeeper sprite
-          if (shopkeeperSprite.complete && shopkeeperSprite.naturalWidth > 0) {
-            const spriteWidth = 43; // Match player size
-            const spriteHeight = 43;
-
-            // Shopkeeper shadow
-            ctx.fillStyle = 'rgba(0,0,0,0.25)';
-            ctx.beginPath();
-            ctx.ellipse(
-              shopkeeper.x,
-              shopkeeper.y + spriteHeight * 0.35,
-              spriteWidth * 0.5,
-              spriteHeight * 0.22,
-              0,
-              0,
-              Math.PI * 2
-            );
-            ctx.fill();
-
-            const px = Math.round(shopkeeper.x - spriteWidth / 2);
-            const py = Math.round(shopkeeper.y - spriteHeight / 2);
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(shopkeeperSprite, px, py, spriteWidth, spriteHeight);
-          } else {
-            // Fallback while loading
-            ctx.fillStyle = 'rgba(0,0,0,0.25)';
-            ctx.beginPath();
-            ctx.ellipse(
-              shopkeeper.x,
-              shopkeeper.y + shopkeeper.radius * 0.4,
-              shopkeeper.radius * 0.6,
-              shopkeeper.radius * 0.2,
-              0,
-              0,
-              Math.PI * 2
-            );
-            ctx.fill();
-
-            ctx.fillStyle = '#ffd700'; // Yellow/gold color
-            ctx.strokeStyle = '#ffaa00';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(
-              shopkeeper.x,
-              shopkeeper.y,
-              shopkeeper.radius,
-              0,
-              Math.PI * 2
-            );
-            ctx.fill();
-            ctx.stroke();
           }
 
           ctx.restore();
@@ -4029,46 +3588,6 @@
               // Apply yellow/orange tint using multiply
               ctx.globalCompositeOperation = 'multiply';
               ctx.fillStyle = '#ffaa00'; // Yellow/orange color
-              ctx.fillRect(
-                worldX - tileSize / 2,
-                worldY - tileSize / 2,
-                tileSize,
-                tileSize
-              );
-              ctx.restore();
-            }
-          }
-
-          // Draw markers for discovered purple X tiles (viewport culling for performance)
-          for (let i = 0; i < radar.discoveredPurpleX.length; i++) {
-            const pos = radar.discoveredPurpleX[i];
-            const worldX = (pos.col + 0.5) * tileSize;
-            const worldY = (pos.row + 0.5) * tileSize;
-
-            // Viewport culling: only draw if visible
-            if (
-              worldX < viewLeft - tileSize ||
-              worldX > viewRight + tileSize ||
-              worldY < viewTop - tileSize ||
-              worldY > viewBottom + tileSize
-            ) {
-              continue;
-            }
-
-            // Draw New_X sprite with purple tint
-            if (newXSprite.complete && newXSprite.naturalWidth > 0) {
-              ctx.save();
-              // Draw the sprite first
-              ctx.drawImage(
-                newXSprite,
-                worldX - tileSize / 2,
-                worldY - tileSize / 2,
-                tileSize,
-                tileSize
-              );
-              // Apply purple tint using multiply
-              ctx.globalCompositeOperation = 'multiply';
-              ctx.fillStyle = '#aa00ff'; // Purple color
               ctx.fillRect(
                 worldX - tileSize / 2,
                 worldY - tileSize / 2,
@@ -4443,9 +3962,6 @@
           drawGrid();
           drawFlora();
 
-          // Shopkeeper NPC
-          drawShopkeeper();
-
           // Old Guy NPC
           drawOldGuy();
 
@@ -4632,62 +4148,6 @@
             ctx.fillStyle = '#e8eaf6';
             ctx.fillText(timeText, canvas.width / 2, 14.5);
           }
-
-          // UI: Money counter (top-right, screen space)
-          ctx.font = 'bold 16px ui-monospace, Menlo, Consolas, monospace';
-          ctx.textAlign = 'right';
-          ctx.textBaseline = 'top';
-          const moneyText = `$${money.amount}`;
-          const moneyTextWidth = ctx.measureText(moneyText).width;
-          const moneyX = canvas.width - 16.5;
-          const moneyY = 14.5;
-
-          // Money border sprite (centered on money text)
-          if (
-            moneyBorderSprite.complete &&
-            moneyBorderSprite.naturalWidth > 0
-          ) {
-            // Calculate size to fully enclose the text with generous padding
-            const borderPadding = 50; // Increased padding for better centering
-            const borderWidth = moneyTextWidth + borderPadding;
-            const borderHeight = 40; // Increased height to better center around text
-
-            // Center the border on the money text
-            // moneyX is the right edge of the text, so center is at moneyX - moneyTextWidth/2
-            const textCenterX = moneyX - moneyTextWidth / 2;
-            const borderX = textCenterX - borderWidth / 2 - 4; // Moved left by 4 pixels
-            const textCenterY = moneyY + 8; // Approximate center of text vertically
-            const borderY = textCenterY - borderHeight / 2 + 6; // Moved down by 6 pixels (was 4)
-
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(
-              moneyBorderSprite,
-              borderX,
-              borderY,
-              borderWidth,
-              borderHeight
-            );
-          } else {
-            // Fallback while loading
-            ctx.fillStyle = 'rgba(10,20,14,0.8)';
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-            ctx.lineWidth = 1;
-            const moneyPadding = 8;
-            const moneyHeight = 18;
-            ctx.beginPath();
-            ctx.rect(
-              moneyX - moneyTextWidth - moneyPadding,
-              moneyY,
-              moneyTextWidth + moneyPadding,
-              moneyHeight
-            );
-            ctx.fill();
-            ctx.stroke();
-          }
-
-          // Money text (drawn on top of border, centered vertically)
-          ctx.fillStyle = '#ffffff';
-          ctx.fillText(moneyText, moneyX, moneyY + 8);
 
           // Draw balancing minigame
           if (balancingMinigame.active) {
@@ -5357,11 +4817,6 @@
             drawInventory();
           }
 
-          // Draw shop menu
-          if (shop.open) {
-            drawShopMenu();
-          }
-
           // Draw vending machine menu
           if (vendingMachine.open) {
             drawVendingMachineMenu();
@@ -5373,7 +4828,6 @@
           if (
             systemMessage.text ||
             (tutorial.active && dayTime.currentDay === 0) ||
-            shopkeeper.dialogue ||
             oldGuy.dialogue ||
             candyKid.dialogue ||
             curator.dialogue
@@ -5437,19 +4891,12 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(
-              'Your week is over, count your money.',
+              'Your week is over!',
               canvas.width / 2,
               canvas.height / 2 - 100
             );
 
-            // Calculate total money (current day's money + previous days)
-            const totalMoney = dayTime.totalMoney + money.amount;
-            ctx.font = 'bold 24px ui-monospace, Menlo, Consolas, monospace';
-            ctx.fillText(
-              `Total: $${totalMoney}`,
-              canvas.width / 2,
-              canvas.height / 2 - 40
-            );
+            // Money system removed
 
             // Determine ending
             let endingText = '';
@@ -5481,6 +4928,8 @@
         }
 
         function drawShopMenu() {
+          // Shop system removed - function stub
+          return;
           ctx.save();
 
           const shopWidth = 400;
@@ -5815,7 +5264,7 @@
 
           // Price (increases by $25 each purchase)
           const priceText = `$${vendingMachine.candyBarPrice}`;
-          const canAfford = money.amount >= vendingMachine.candyBarPrice;
+          const canAfford = false; // Money system removed
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
           ctx.textAlign = 'right';
@@ -5857,6 +5306,8 @@
         }
 
         function purchaseVendingMachineItem() {
+          // Money system removed - function stub
+          return;
           // Check if player can afford candybar
           if (money.amount >= vendingMachine.candyBarPrice) {
             // Deduct money and increase price
@@ -5869,6 +5320,8 @@
         }
 
         function purchaseItem(itemIndex) {
+          // Shop system removed - function stub
+          return;
           if (itemIndex < 0 || itemIndex >= shop.items.length) return;
 
           const item = shop.items[itemIndex];
@@ -6061,8 +5514,6 @@
             characterName = ''; // System messages have no character name
           } else if (tutorial.active) {
             characterName = 'Candy Kid';
-          } else if (shopkeeper.dialogue) {
-            characterName = 'Chase';
           } else if (oldGuy.dialogue) {
             characterName = 'Uncle Bernie';
           } else if (candyKid.dialogue) {
@@ -6096,11 +5547,7 @@
             ? systemMessage.text
             : tutorial.active
             ? tutorial.dialogue
-            : shopkeeper.dialogue ||
-              oldGuy.dialogue ||
-              candyKid.dialogue ||
-              curator.dialogue ||
-              '';
+            : oldGuy.dialogue || candyKid.dialogue || curator.dialogue || '';
           const words = dialogueText.split(' ');
           let line = '';
           // Start text below character name and line (add extra space if name exists)
@@ -6633,8 +6080,6 @@
               dayTime.currentDay = 0; // Start on Monday
               dayTime.currentHour = 8; // Start at 8:00 AM
               dayTime.hourTimer = 0;
-              dayTime.totalMoney = 0;
-              money.amount = 10000; // Starting money for testing
 
               // Reset player position
               player.x = world.width / 2;
