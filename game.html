@@ -340,24 +340,6 @@
           trees: createScatter(65, 78, 102, 140, 180),
         };
 
-        const balancingMinigame = {
-          active: false,
-          potAngle: 0,
-          potAngularVelocity: 0,
-          timeRemaining: 15,
-          baseReward: 10,
-          stickX: 0,
-          stickY: 0,
-          potSprite: null,
-          potType: 'regular',
-          tileRow: null,
-          tileCol: null,
-          breaking: false,
-          breakTimer: 0,
-          pieces: [],
-          isSecretX: false, // Track if this minigame came from a secret X tile
-        };
-
         const brushingMinigame = {
           active: false,
           dirtLevel: 1.0,
@@ -396,22 +378,24 @@
           isSecretX: false, // Track if this minigame came from a secret X tile
         };
 
+        const minesweeperMinigame = {
+          active: false,
+          grid: [], // 6x6 grid of cells (true = mine, false = safe)
+          revealed: [], // Boolean grid for revealed cells
+          flagged: [], // Boolean grid for flagged cells
+          gridSize: 6,
+          mineCount: 4, // 4 mines in a 6x6 grid
+          gameOver: false,
+          won: false,
+          firstClick: true,
+          clickCount: 0, // Track number of left clicks made (to prevent winning on first turn)
+          tileRow: null,
+          tileCol: null,
+          isSecretX: false,
+          baseReward: 10,
+        };
+
         // Optimize sprite loading: set imageSmoothingEnabled before src for faster rendering
-        const potSprite = new Image();
-        potSprite.imageSmoothingEnabled = false;
-        potSprite.src = 'assets/sprites/pot.png';
-
-        const potTallTanSprite = new Image();
-        potTallTanSprite.imageSmoothingEnabled = false;
-        potTallTanSprite.src = 'assets/sprites/tall-pot.png';
-
-        const potShortGreySprite = new Image();
-        potShortGreySprite.imageSmoothingEnabled = false;
-        potShortGreySprite.src = 'assets/sprites/short-pot.png';
-
-        const potPoleSprite = new Image();
-        potPoleSprite.imageSmoothingEnabled = false;
-        potPoleSprite.src = 'assets/sprites/pot-pole.png';
 
         const brushSprite = new Image();
         brushSprite.imageSmoothingEnabled = false;
@@ -1084,9 +1068,9 @@
               e.preventDefault();
               // Don't allow opening inventory during minigame or game over
               if (
-                balancingMinigame.active ||
                 brushingMinigame.active ||
                 declarationMinigame.active ||
+                minesweeperMinigame.active ||
                 gameOver.active
               ) {
                 return;
@@ -1106,9 +1090,9 @@
               // Don't allow interaction during crouch animation or minigames (minigames use spacebar for their own mechanics)
               if (
                 crouchAnimation.active ||
-                balancingMinigame.active ||
                 brushingMinigame.active ||
-                declarationMinigame.active
+                declarationMinigame.active ||
+                minesweeperMinigame.active
               ) {
                 return;
               }
@@ -1227,6 +1211,47 @@
         let mouseX = 0;
         let mouseY = 0;
 
+        // Handle right clicks for minesweeper (contextmenu prevention)
+        canvas.addEventListener('contextmenu', (e) => {
+          if (
+            minesweeperMinigame.active &&
+            !minesweeperMinigame.gameOver &&
+            !minesweeperMinigame.won
+          ) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            const gridSize = minesweeperMinigame.gridSize;
+            const cellSize = 40;
+            const panelWidth = gridSize * cellSize + 80; // Match render function
+            const panelHeight = gridSize * cellSize + 140; // Match render function
+            const panelX = (canvas.width - panelWidth) / 2;
+            const panelY = (canvas.height - panelHeight) / 2;
+            const gridWidth = gridSize * cellSize;
+            const gridStartX = panelX + (panelWidth - gridWidth) / 2;
+            const gridStartY = panelY + 50; // Match render function
+
+            // Check if click is within grid bounds
+            if (
+              x >= gridStartX &&
+              x <= gridStartX + gridSize * cellSize &&
+              y >= gridStartY &&
+              y <= gridStartY + gridSize * cellSize
+            ) {
+              const col = Math.floor((x - gridStartX) / cellSize);
+              const row = Math.floor((y - gridStartY) / cellSize);
+
+              if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
+                handleMinesweeperClick(minesweeperMinigame, row, col, true);
+              }
+            }
+          }
+        });
+
         canvas.addEventListener('mousemove', (e) => {
           const rect = canvas.getBoundingClientRect();
           // Account for canvas scaling - convert display coordinates to internal canvas coordinates
@@ -1330,6 +1355,38 @@
             // Close button removed
           }
 
+          // Minesweeper minigame clicks (left click)
+          if (
+            minesweeperMinigame.active &&
+            !minesweeperMinigame.gameOver &&
+            !minesweeperMinigame.won
+          ) {
+            const gridSize = minesweeperMinigame.gridSize;
+            const cellSize = 40;
+            const panelWidth = gridSize * cellSize + 80; // Match render function
+            const panelHeight = gridSize * cellSize + 140; // Match render function
+            const panelX = (canvas.width - panelWidth) / 2;
+            const panelY = (canvas.height - panelHeight) / 2;
+            const gridWidth = gridSize * cellSize;
+            const gridStartX = panelX + (panelWidth - gridWidth) / 2;
+            const gridStartY = panelY + 50; // Match render function
+
+            // Check if click is within grid bounds
+            if (
+              x >= gridStartX &&
+              x <= gridStartX + gridSize * cellSize &&
+              y >= gridStartY &&
+              y <= gridStartY + gridSize * cellSize
+            ) {
+              const col = Math.floor((x - gridStartX) / cellSize);
+              const row = Math.floor((y - gridStartY) / cellSize);
+
+              if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
+                handleMinesweeperClick(minesweeperMinigame, row, col, false);
+              }
+            }
+          }
+
           // Inventory click handling (eating candybars from equipment slot, and inventory slots)
           if (inventory.open) {
             // Equipment items array (must match drawInventory)
@@ -1343,11 +1400,6 @@
                 name: 'Chocolate Bar',
                 sprite: chocolateBarSprite,
                 description: 'Speeds up your movement',
-              },
-              {
-                name: 'Speed Brush',
-                sprite: speedBrushSprite,
-                description: 'Makes brushing minigame easier',
               },
             ];
 
@@ -1581,7 +1633,13 @@
             }
 
             // Check if day should end (6 PM = 18:00)
-            if (dayTime.currentHour >= dayTime.dayEndHour) {
+            // Only end day if not in a minigame
+            if (
+              dayTime.currentHour >= dayTime.dayEndHour &&
+              !brushingMinigame.active &&
+              !declarationMinigame.active &&
+              !minesweeperMinigame.active
+            ) {
               // Go to museum (except Sunday/after Sunday)
               if (dayTime.currentDay < 6) {
                 // Not Sunday yet, go to museum
@@ -1742,19 +1800,9 @@
               walkAnimationFrame = 0;
             }
 
-            // Stamina update
-            if (shouldDrain) {
-              stamina.current -= stamina.drainPerSecond * dt;
-            } else {
-              stamina.current += stamina.regenPerSecond * dt;
-            }
-            stamina.current = clamp(stamina.current, 0, stamina.max);
-
-            if (stamina.current <= 0.0001) {
-              stamina.exhausted = true;
-            } else if (stamina.current >= stamina.max - 0.0001) {
-              stamina.exhausted = false;
-            }
+            // Infinite stamina in museum - keep it at max
+            stamina.current = stamina.max;
+            stamina.exhausted = false;
           }
 
           // Only update player movement if inventory is closed, shop is closed, vending machine is closed, dialogue is not showing, tutorial is not active, crouch animation is not active, and minigame is not active
@@ -1764,11 +1812,13 @@
             !inventory.open &&
             !systemMessage.text &&
             !oldGuy.dialogue &&
+            !joseph.dialogue &&
+            !curator.dialogue &&
             !tutorial.active &&
             !crouchAnimation.active &&
-            !balancingMinigame.active &&
             !brushingMinigame.active &&
             !declarationMinigame.active &&
+            !minesweeperMinigame.active &&
             !gameOver.active
           ) {
             const wantsSprint = pressed('ShiftLeft') || pressed('ShiftRight');
@@ -1952,9 +2002,9 @@
             }
           }
 
-          updateBalancingMinigame(dtMs);
           updateBrushingMinigame(dtMs);
           updateDeclarationMinigame(dtMs);
+          updateMinesweeperMinigame(dtMs);
           updateRadar(dtMs);
         }
 
@@ -2165,16 +2215,16 @@
               'Did you know that radars can detect hidden things underground?';
           } else if (joseph.dialogueStage === 2) {
             joseph.dialogue =
-              'This one here is a GPR, or Ground penetrating radar.';
+              'This one here is a GPR, or Ground Penetrating Radar.';
           } else if (joseph.dialogueStage === 3) {
             joseph.dialogue =
-              'It works by emitting radiowaves that bounce off objects, approximating their location.';
+              'It works by emitting radio waves that bounce off objects, approximating their location.';
           } else if (joseph.dialogueStage === 4) {
             joseph.dialogue =
-              'Since I dont have much use for this radar, you can have it- for a price.';
+              "Since I don't have much use for this radar, you can have it - for a price.";
           } else if (joseph.dialogueStage === 5) {
             joseph.dialogue =
-              'Give me  a artifact using ths radar and you can keep it fo good!';
+              'Give me an artifact using this radar and you can keep it for good!';
           } else if (joseph.dialogueStage >= 6) {
             // Give radar to player and activate quest
             if (!joseph.hasGivenRadar) {
@@ -2368,15 +2418,8 @@
                 // Only store minigame if on red X or secret X tile, otherwise just play animation
                 if (tile.name === 'redX' || tile.name === 'secretX') {
                   // Store which minigame to start after animation
-                  // Probabilities: 40% balancing (pots), 40% declaration (typo), 20% brushing
-                  const minigameRoll = Math.random();
-                  if (minigameRoll < 0.4) {
-                    crouchAnimation.pendingMinigame = 'balancing';
-                  } else if (minigameRoll < 0.8) {
-                    crouchAnimation.pendingMinigame = 'declaration';
-                  } else {
-                    crouchAnimation.pendingMinigame = 'brushing';
-                  }
+                  // Testing: 100% minesweeper
+                  crouchAnimation.pendingMinigame = 'minesweeper';
                   // Store whether this is a secret X tile for later reward multiplier
                   crouchAnimation.isSecretX = tile.name === 'secretX';
                 } else {
@@ -2453,41 +2496,7 @@
           const col = Math.floor(player.x / tileSize);
           const row = Math.floor(player.y / tileSize);
 
-          if (crouchAnimation.pendingMinigame === 'balancing') {
-            // Start Balancing minigame
-            balancingMinigame.active = true;
-            balancingMinigame.tileRow = row;
-            balancingMinigame.tileCol = col;
-            balancingMinigame.isSecretX = crouchAnimation.isSecretX;
-            balancingMinigame.potAngle = 0;
-            balancingMinigame.potAngularVelocity = 0;
-            balancingMinigame.timeRemaining = 15;
-            balancingMinigame.breaking = false;
-            balancingMinigame.breakTimer = 0;
-            balancingMinigame.pieces = [];
-            // Initialize stick position to center of screen (lowered down)
-            // Ensure canvas dimensions are valid
-            const centerX = canvas && canvas.width ? canvas.width / 2 : 400;
-            const centerY = canvas && canvas.height ? canvas.height / 2 : 300;
-            balancingMinigame.stickX = centerX;
-            balancingMinigame.stickY = centerY; // Will be lowered by 40px in render
-            // Randomly select pot type (equal chance for each)
-            const potTypeRoll = Math.random();
-            if (potTypeRoll < 0.333) {
-              balancingMinigame.potType = 'regular';
-            } else if (potTypeRoll < 0.666) {
-              balancingMinigame.potType = 'tall';
-            } else {
-              balancingMinigame.potType = 'short';
-            }
-            // Ensure potAngle and other values are initialized
-            if (balancingMinigame.potAngle === undefined) {
-              balancingMinigame.potAngle = 0;
-            }
-            if (balancingMinigame.potAngularVelocity === undefined) {
-              balancingMinigame.potAngularVelocity = 0;
-            }
-          } else if (crouchAnimation.pendingMinigame === 'brushing') {
+          if (crouchAnimation.pendingMinigame === 'brushing') {
             // Start Brushing minigame
             brushingMinigame.active = true;
             brushingMinigame.tileRow = row;
@@ -2548,218 +2557,41 @@
               // Real version (no typos)
               declarationMinigame.testExcerpt = declarationMinigame.realExcerpt;
             }
+          } else if (crouchAnimation.pendingMinigame === 'minesweeper') {
+            // Start Minesweeper minigame
+            minesweeperMinigame.active = true;
+            minesweeperMinigame.tileRow = row;
+            minesweeperMinigame.tileCol = col;
+            minesweeperMinigame.isSecretX = crouchAnimation.isSecretX;
+            minesweeperMinigame.gameOver = false;
+            minesweeperMinigame.won = false;
+            minesweeperMinigame.firstClick = true;
+            minesweeperMinigame.clickCount = 0; // Reset click count for new game
+
+            // Initialize empty grids
+            const size = minesweeperMinigame.gridSize;
+            minesweeperMinigame.grid = [];
+            minesweeperMinigame.revealed = [];
+            minesweeperMinigame.flagged = [];
+
+            for (let i = 0; i < size; i++) {
+              minesweeperMinigame.grid[i] = [];
+              minesweeperMinigame.revealed[i] = [];
+              minesweeperMinigame.flagged[i] = [];
+              for (let j = 0; j < size; j++) {
+                minesweeperMinigame.grid[i][j] = false; // false = no mine
+                minesweeperMinigame.revealed[i][j] = false;
+                minesweeperMinigame.flagged[i][j] = false;
+              }
+            }
+
+            // Mines will be placed after first click to ensure first click is safe
           }
 
           // Reset crouch animation
           crouchAnimation.active = false;
           crouchAnimation.timer = 0;
           crouchAnimation.pendingMinigame = null;
-        }
-
-        function updateBalancingMinigame(dtMs) {
-          if (!balancingMinigame.active) return;
-
-          const dt = dtMs / 1000; // Convert to seconds
-
-          // Player input affects angular velocity
-          const leftInput = pressed('ArrowLeft') || pressed('KeyA');
-          const rightInput = pressed('ArrowRight') || pressed('KeyD');
-
-          // Get pot type modifiers
-          // Tall pot: more susceptible to gravity and balancing (harder)
-          // Short pot: less susceptible to gravity and balancing (easier)
-          // Regular pot: normal difficulty
-          let gravityMultiplier = 1.0;
-          let inputMultiplier = 1.0;
-          let teeteringMultiplier = 1.0;
-
-          if (balancingMinigame.potType === 'tall') {
-            gravityMultiplier = 1.2; // 20% more gravity (reduced from 1.5)
-            inputMultiplier = 0.85; // 15% less effective input (reduced from 0.7)
-            teeteringMultiplier = 1.2; // 20% more teetering (reduced from 1.4)
-          } else if (balancingMinigame.potType === 'short') {
-            gravityMultiplier = 0.6; // 40% less gravity
-            inputMultiplier = 1.3; // 30% more effective input
-            teeteringMultiplier = 0.7; // 30% less teetering
-          }
-
-          if (leftInput && !rightInput) {
-            balancingMinigame.potAngularVelocity -= 0.2 * dt * inputMultiplier; // Lean left
-          } else if (rightInput && !leftInput) {
-            balancingMinigame.potAngularVelocity += 0.2 * dt * inputMultiplier; // Lean right
-          }
-
-          // Natural physics: pot wants to fall (very strong teetering force)
-          const baseGravity = 0.6; // How fast it wants to fall (very strong - requires constant input)
-          const gravity = baseGravity * gravityMultiplier;
-          const damping = 0.985; // Less friction to allow stronger movement
-
-          // Apply gravity based on current angle (very strong)
-          balancingMinigame.potAngularVelocity +=
-            Math.sin(balancingMinigame.potAngle) * gravity * dt;
-
-          // Add constant teetering force to make it much harder
-          balancingMinigame.potAngularVelocity +=
-            Math.sin(balancingMinigame.potAngle * 2) *
-            0.18 *
-            dt *
-            teeteringMultiplier;
-
-          // Add additional random-like teetering force
-          balancingMinigame.potAngularVelocity +=
-            Math.sin(balancingMinigame.potAngle * 3 + Date.now() * 0.001) *
-            0.12 *
-            dt *
-            teeteringMultiplier;
-
-          // Apply damping
-          balancingMinigame.potAngularVelocity *= Math.pow(damping, dt * 60); // Normalize to 60fps
-
-          // Update angle
-          balancingMinigame.potAngle +=
-            balancingMinigame.potAngularVelocity * dt;
-
-          // Check if pot fell off (angle too extreme - make it easier to lose)
-          const maxAngle = Math.PI / 4.5; // About 40 degrees (easier to lose)
-          if (
-            Math.abs(balancingMinigame.potAngle) > maxAngle &&
-            !balancingMinigame.breaking
-          ) {
-            // Start breaking animation
-            balancingMinigame.breaking = true;
-            balancingMinigame.breakTimer = 0.5; // 0.5 seconds of breaking animation
-
-            // Create pot pieces flying off
-            const potSize = 100;
-            const stickX = balancingMinigame.stickX;
-            const stickTipY = balancingMinigame.stickY - 25;
-            const potContactY = stickTipY + 5; // Match the pot position from drawing code (slightly lower)
-            const potCenterX = stickX;
-            const potCenterY = potContactY - potSize / 2;
-
-            // Create 8-12 pieces
-            const numPieces = 10;
-            balancingMinigame.pieces = [];
-            for (let i = 0; i < numPieces; i++) {
-              const angle =
-                (Math.PI * 2 * i) / numPieces + balancingMinigame.potAngle;
-              const speed = 2 + Math.random() * 3;
-              balancingMinigame.pieces.push({
-                x: potCenterX,
-                y: potCenterY,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed - 1, // Slight upward bias
-                rotation: Math.random() * Math.PI * 2,
-                rotationSpeed: (Math.random() - 0.5) * 0.3,
-                size: 8 + Math.random() * 12,
-                opacity: 1.0,
-              });
-            }
-          }
-
-          // Update breaking animation
-          if (balancingMinigame.breaking) {
-            balancingMinigame.breakTimer -= dt;
-
-            // Update pieces
-            for (let i = 0; i < balancingMinigame.pieces.length; i++) {
-              const piece = balancingMinigame.pieces[i];
-              piece.x += piece.vx * dt * 60;
-              piece.y += piece.vy * dt * 60;
-              piece.vy += 0.5 * dt * 60; // Gravity
-              piece.rotation += piece.rotationSpeed * dt * 60;
-              piece.opacity -= dt * 2; // Fade out
-            }
-
-            // End minigame after breaking animation
-            if (balancingMinigame.breakTimer <= 0) {
-              // Failed - give base reward with shovel multiplier and secret X multiplier
-              let multiplier = 1.0;
-              if (inventory.equipment) {
-                if (inventory.equipment.tier === 1)
-                  multiplier = 1.5; // Simple shovel
-                else if (inventory.equipment.tier === 2)
-                  multiplier = 2.0; // Iron shovel
-                else if (inventory.equipment.tier === 3) multiplier = 2.5; // Steel shovel
-              }
-              // Apply 1.5x multiplier for secret X tiles
-              if (balancingMinigame.isSecretX) {
-                multiplier *= 1.5;
-              }
-              const grassDef = tileDefinitions.find(
-                (def) => def.name === 'grass'
-              );
-              if (
-                grassDef &&
-                balancingMinigame.tileRow !== null &&
-                balancingMinigame.tileCol !== null
-              ) {
-                tileMap[balancingMinigame.tileRow][balancingMinigame.tileCol] =
-                  {
-                    name: grassDef.name,
-                    canvas: createTileCanvas(grassDef.draw),
-                  };
-                // Remove from discovered secret X list if it was a secret X tile
-                radar.discoveredSecretX = radar.discoveredSecretX.filter(
-                  (pos) =>
-                    !(
-                      pos.row === balancingMinigame.tileRow &&
-                      pos.col === balancingMinigame.tileCol
-                    )
-                );
-              }
-              balancingMinigame.active = false;
-              balancingMinigame.breaking = false;
-              balancingMinigame.pieces = [];
-              return;
-            }
-          }
-
-          // Update timer
-          balancingMinigame.timeRemaining -= dt;
-
-          // Check if succeeded (15 seconds passed)
-          if (balancingMinigame.timeRemaining <= 0) {
-            // Success - give 3x reward with shovel multiplier and secret X multiplier
-            let multiplier = 3.0; // Base success multiplier (3x)
-            if (inventory.equipment) {
-              if (inventory.equipment.tier === 1)
-                multiplier = 4.5; // Simple shovel: 1.5x * 3 = 4.5x
-              else if (inventory.equipment.tier === 2)
-                multiplier = 6.0; // Iron shovel: 2x * 3 = 6x
-              else if (inventory.equipment.tier === 3) multiplier = 7.5; // Steel shovel: 2.5x * 3 = 7.5x
-            }
-            // Apply 1.5x multiplier for secret X tiles
-            if (balancingMinigame.isSecretX) {
-              multiplier *= 1.5;
-            }
-
-            // Give minigame reward (bullets or grapeshot)
-            giveMinigameReward();
-
-            const grassDef = tileDefinitions.find(
-              (def) => def.name === 'grass'
-            );
-            if (
-              grassDef &&
-              balancingMinigame.tileRow !== null &&
-              balancingMinigame.tileCol !== null
-            ) {
-              tileMap[balancingMinigame.tileRow][balancingMinigame.tileCol] = {
-                name: grassDef.name,
-                canvas: createTileCanvas(grassDef.draw),
-              };
-              // Remove from discovered secret X list if it was a secret X tile
-              radar.discoveredSecretX = radar.discoveredSecretX.filter(
-                (pos) =>
-                  !(
-                    pos.row === balancingMinigame.tileRow &&
-                    pos.col === balancingMinigame.tileCol
-                  )
-              );
-            }
-            balancingMinigame.active = false;
-          }
         }
 
         function updateBrushingMinigame(dtMs) {
@@ -3040,6 +2872,188 @@
           // Minigame logic is handled by key presses, no continuous updates needed
         }
 
+        // Minesweeper helper functions
+        function placeMines(minesweeper, safeRow, safeCol) {
+          // Place mines randomly, but not on the first clicked cell or its neighbors
+          const size = minesweeper.gridSize;
+          let placed = 0;
+          const safeCells = new Set();
+
+          // Mark first click and all neighbors as safe
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              const r = safeRow + dr;
+              const c = safeCol + dc;
+              if (r >= 0 && r < size && c >= 0 && c < size) {
+                safeCells.add(`${r},${c}`);
+              }
+            }
+          }
+
+          while (placed < minesweeper.mineCount) {
+            const row = Math.floor(Math.random() * size);
+            const col = Math.floor(Math.random() * size);
+            const key = `${row},${col}`;
+
+            if (!minesweeper.grid[row][col] && !safeCells.has(key)) {
+              minesweeper.grid[row][col] = true; // true = mine
+              placed++;
+            }
+          }
+        }
+
+        function countAdjacentMines(minesweeper, row, col) {
+          let count = 0;
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              if (dr === 0 && dc === 0) continue;
+              const r = row + dr;
+              const c = col + dc;
+              if (
+                r >= 0 &&
+                r < minesweeper.gridSize &&
+                c >= 0 &&
+                c < minesweeper.gridSize
+              ) {
+                if (minesweeper.grid[r][c]) count++;
+              }
+            }
+          }
+          return count;
+        }
+
+        function revealCell(minesweeper, row, col) {
+          if (minesweeper.revealed[row][col] || minesweeper.flagged[row][col])
+            return;
+
+          minesweeper.revealed[row][col] = true;
+
+          // If it's a mine, game over
+          if (minesweeper.grid[row][col]) {
+            minesweeper.gameOver = true;
+            return;
+          }
+
+          // If no adjacent mines, reveal neighbors
+          const count = countAdjacentMines(minesweeper, row, col);
+          if (count === 0) {
+            for (let dr = -1; dr <= 1; dr++) {
+              for (let dc = -1; dc <= 1; dc++) {
+                if (dr === 0 && dc === 0) continue;
+                const r = row + dr;
+                const c = col + dc;
+                if (
+                  r >= 0 &&
+                  r < minesweeper.gridSize &&
+                  c >= 0 &&
+                  c < minesweeper.gridSize
+                ) {
+                  if (
+                    !minesweeper.revealed[r][c] &&
+                    !minesweeper.flagged[r][c]
+                  ) {
+                    revealCell(minesweeper, r, c);
+                  }
+                }
+              }
+            }
+          }
+
+          // Check win condition
+          checkMinesweeperWin(minesweeper);
+        }
+
+        function checkMinesweeperWin(minesweeper) {
+          // Prevent winning on the first turn (first click)
+          // Player must make at least 2 clicks before they can win
+          if (minesweeper.clickCount < 2) {
+            return; // Don't check for win until player has made at least 2 clicks
+          }
+
+          const size = minesweeper.gridSize;
+          let revealedCount = 0;
+          for (let i = 0; i < size; i++) {
+            for (let j = 0; j < size; j++) {
+              if (minesweeper.revealed[i][j]) revealedCount++;
+            }
+          }
+          // Win if all non-mine cells are revealed
+          const totalCells = size * size;
+          const nonMineCells = totalCells - minesweeper.mineCount;
+          if (revealedCount === nonMineCells) {
+            minesweeper.won = true;
+          }
+        }
+
+        function handleMinesweeperClick(minesweeper, row, col, isRightClick) {
+          if (minesweeper.gameOver || minesweeper.won) return;
+
+          if (isRightClick) {
+            // Right click = toggle flag
+            if (!minesweeper.revealed[row][col]) {
+              minesweeper.flagged[row][col] = !minesweeper.flagged[row][col];
+            }
+          } else {
+            // Left click = reveal
+            if (minesweeper.flagged[row][col]) return; // Can't reveal flagged cells
+
+            // Place mines on first click (ensuring first click is safe)
+            if (minesweeper.firstClick) {
+              placeMines(minesweeper, row, col);
+              minesweeper.firstClick = false;
+            }
+
+            // Increment click count before revealing (to track turns for win prevention)
+            minesweeper.clickCount++;
+
+            revealCell(minesweeper, row, col);
+          }
+        }
+
+        function updateMinesweeperMinigame(dtMs) {
+          if (!minesweeperMinigame.active) return;
+
+          // If game over or won, wait a bit then close
+          if (minesweeperMinigame.gameOver || minesweeperMinigame.won) {
+            // Close after a delay to show result
+            setTimeout(() => {
+              if (minesweeperMinigame.won) {
+                // Give reward for winning
+                giveMinigameReward();
+
+                // Convert tile to grass
+                const grassDef = tileDefinitions.find(
+                  (def) => def.name === 'grass'
+                );
+                if (
+                  grassDef &&
+                  minesweeperMinigame.tileRow !== null &&
+                  minesweeperMinigame.tileCol !== null
+                ) {
+                  tileMap[minesweeperMinigame.tileRow][
+                    minesweeperMinigame.tileCol
+                  ] = {
+                    name: grassDef.name,
+                    canvas: createTileCanvas(grassDef.draw),
+                  };
+                  // Remove from discovered secret X list if it was a secret X tile
+                  radar.discoveredSecretX = radar.discoveredSecretX.filter(
+                    (pos) =>
+                      !(
+                        pos.row === minesweeperMinigame.tileRow &&
+                        pos.col === minesweeperMinigame.tileCol
+                      )
+                  );
+                }
+              }
+
+              minesweeperMinigame.active = false;
+              minesweeperMinigame.gameOver = false;
+              minesweeperMinigame.won = false;
+            }, 2000); // 2 second delay
+          }
+        }
+
         function updateRadar(dtMs) {
           if (!radar.active) return;
           // Don't fire radar while in any menu
@@ -3203,12 +3217,16 @@
         radarRingSprite.imageSmoothingEnabled = false;
         radarRingSprite.src = 'assets/sprites/Radar_Ring.png';
 
+        const flagSprite = new Image();
+        flagSprite.imageSmoothingEnabled = false;
+        flagSprite.src = 'assets/sprites/Flag.png';
+
+        const dirtTileSprite = new Image();
+        dirtTileSprite.imageSmoothingEnabled = false;
+        dirtTileSprite.src = 'assets/sprites/Dirt_Tile.png';
+
         // Initialize allSprites array after ALL sprites are defined
         allSprites = [
-          potSprite,
-          potTallTanSprite,
-          potShortGreySprite,
-          potPoleSprite,
           brushSprite,
           speedBrushSprite,
           // candyKidSprite, // Removed - NPC not in use
@@ -3227,6 +3245,8 @@
           chocolateBarSprite,
           bulletsSprite,
           grapeshotSprite,
+          flagSprite,
+          dirtTileSprite,
           floorTileSprite,
           wallTileSprite,
           wallDoorSprite,
@@ -4157,184 +4177,6 @@
             ctx.fillText(timeText, canvas.width / 2, 14.5);
           }
 
-          // Draw balancing minigame
-          if (balancingMinigame.active) {
-            ctx.save();
-
-            // Background overlay
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Minigame panel (bigger to fit text)
-            const panelWidth = 450;
-            const panelHeight = 350;
-            const panelX = (canvas.width - panelWidth) / 2;
-            const panelY = (canvas.height - panelHeight) / 2;
-
-            ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
-            ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-
-            ctx.strokeStyle = '#ffffff'; // White menu borders
-            ctx.lineWidth = 3;
-            ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
-
-            // Draw pot pole sprite (replaces drawn stick)
-            // Ensure stick position is valid (fallback to center if undefined)
-            // Lower the stick position down in the panel so pole is visible below pot
-            const stickX = balancingMinigame.stickX || canvas.width / 2;
-            const stickY = (balancingMinigame.stickY || canvas.height / 2) + 80; // Lower by 80px (was 40px) so pole extends below pot
-            const stickBaseY = stickY + 25; // Bottom of stick
-            const stickTipY = stickY - 25; // Top of stick (tip)
-            const stickHeight = stickBaseY - stickTipY; // Height of stick area
-
-            // Draw pole sprite centered at stick position
-            if (potPoleSprite.complete && potPoleSprite.naturalWidth > 0) {
-              ctx.imageSmoothingEnabled = false;
-              // Maintain aspect ratio but make it bigger
-              // Use the sprite's natural aspect ratio to avoid warping
-              const aspectRatio =
-                potPoleSprite.naturalWidth / potPoleSprite.naturalHeight;
-              const baseHeight = stickHeight * 1.5; // 1.5x bigger (was 2x)
-              const poleHeight = baseHeight;
-              const poleWidth = poleHeight * aspectRatio; // Maintain aspect ratio
-              // Center the pole on the stick position
-              const poleX = stickX - poleWidth / 2; // Center horizontally
-              const poleY = stickY - poleHeight / 2; // Center vertically on stickY
-              ctx.drawImage(potPoleSprite, poleX, poleY, poleWidth, poleHeight);
-            } else {
-              // Fallback: draw simple stick while sprite loads
-              ctx.strokeStyle = '#8b4513'; // Brown
-              ctx.lineWidth = 6;
-              ctx.lineCap = 'round';
-              ctx.beginPath();
-              ctx.moveTo(stickX, stickBaseY);
-              ctx.lineTo(stickX, stickTipY);
-              ctx.stroke();
-              ctx.fillStyle = '#654321'; // Darker brown for tip
-              ctx.beginPath();
-              ctx.arc(stickX, stickTipY, 3, 0, Math.PI * 2);
-              ctx.fill();
-            }
-
-            // Draw pot balancing on tip of stick - only if not breaking
-            // Pot size varies by type: tall is taller, short is shorter
-            let potSize = 100; // Base size for regular pot
-            if (balancingMinigame.potType === 'tall') {
-              potSize = 120; // Taller pot
-            } else if (balancingMinigame.potType === 'short') {
-              potSize = 80; // Shorter pot
-            }
-
-            // Position pot slightly lower so it rests on the pole
-            const potContactY = stickTipY + 5; // Pot contacts stick slightly below tip
-
-            // Ensure potType is set (fallback to 'regular' if undefined)
-            if (!balancingMinigame.potType) {
-              balancingMinigame.potType = 'regular';
-            }
-
-            if (!balancingMinigame.breaking) {
-              ctx.save();
-              // Translate to the contact point (where pot touches stick tip)
-              ctx.translate(stickX, potContactY);
-              // Rotate around the contact point (ensure angle is a number)
-              const potAngle = balancingMinigame.potAngle || 0;
-              ctx.rotate(potAngle);
-
-              // Select the correct pot sprite based on type
-              let currentPotSprite = potSprite;
-              if (balancingMinigame.potType === 'tall') {
-                currentPotSprite = potTallTanSprite;
-              } else if (balancingMinigame.potType === 'short') {
-                currentPotSprite = potShortGreySprite;
-              }
-
-              // Draw pot sprite from PNG, offset upward so bottom is at rotation point
-              if (
-                currentPotSprite.complete &&
-                currentPotSprite.naturalWidth > 0
-              ) {
-                ctx.imageSmoothingEnabled = false;
-                // Draw with bottom at origin (0, 0), so pot extends upward
-                ctx.drawImage(
-                  currentPotSprite,
-                  -potSize / 2,
-                  -potSize,
-                  potSize,
-                  potSize
-                );
-              } else {
-                // Placeholder while loading (color varies by type)
-                if (balancingMinigame.potType === 'tall') {
-                  ctx.fillStyle = '#d2b48c'; // Tan color
-                } else if (balancingMinigame.potType === 'short') {
-                  ctx.fillStyle = '#808080'; // Grey color
-                } else {
-                  ctx.fillStyle = '#8b4513'; // Brown for regular
-                }
-                ctx.beginPath();
-                ctx.ellipse(
-                  0,
-                  -potSize / 2,
-                  potSize / 2,
-                  potSize / 2.5,
-                  0,
-                  0,
-                  Math.PI * 2
-                );
-                ctx.fill();
-              }
-
-              ctx.restore();
-            }
-
-            // Draw breaking pot pieces
-            if (
-              balancingMinigame.breaking &&
-              balancingMinigame.pieces.length > 0
-            ) {
-              for (let i = 0; i < balancingMinigame.pieces.length; i++) {
-                const piece = balancingMinigame.pieces[i];
-                if (piece.opacity > 0) {
-                  ctx.save();
-                  ctx.globalAlpha = piece.opacity;
-                  ctx.translate(piece.x, piece.y);
-                  ctx.rotate(piece.rotation);
-
-                  // Draw pot piece (brown fragment)
-                  ctx.fillStyle = '#8b4513';
-                  ctx.strokeStyle = '#654321';
-                  ctx.lineWidth = 1;
-                  ctx.beginPath();
-                  ctx.rect(
-                    -piece.size / 2,
-                    -piece.size / 2,
-                    piece.size,
-                    piece.size
-                  );
-                  ctx.fill();
-                  ctx.stroke();
-
-                  ctx.restore();
-                }
-              }
-            }
-
-            // Timer text removed
-
-            // Instructions
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '18px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(
-              'Use arrow keys to keep the pot from tipping!',
-              canvas.width / 2,
-              panelY + panelHeight - 20
-            );
-
-            ctx.restore();
-          }
-
           // Draw brushing minigame
           if (brushingMinigame.active) {
             ctx.save();
@@ -4727,7 +4569,7 @@
               }
 
               ctx.fillStyle = resultColor;
-              ctx.font = 'bold 32px ui-monospace, Menlo, Consolas, monospace';
+              ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
               ctx.fillText(
                 resultText,
                 Math.round(canvas.width / 2),
@@ -4801,6 +4643,190 @@
             ctx.restore();
           }
 
+          // Draw Minesweeper minigame
+          if (minesweeperMinigame.active) {
+            ctx.save();
+
+            // Background overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Minigame panel
+            const gridSize = minesweeperMinigame.gridSize;
+            const cellSize = 40; // Size of each cell
+            const panelWidth = gridSize * cellSize + 80; // Increased padding
+            const panelHeight = gridSize * cellSize + 140; // Increased padding
+            const panelX = (canvas.width - panelWidth) / 2;
+            const panelY = (canvas.height - panelHeight) / 2;
+
+            ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
+            ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+            // Title
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText('Minesweeper', canvas.width / 2, panelY + 15);
+
+            // Draw grid (centered in panel)
+            const gridWidth = gridSize * cellSize;
+            const gridHeight = gridSize * cellSize;
+            const gridStartX = panelX + (panelWidth - gridWidth) / 2;
+            const gridStartY = panelY + 50; // Keep title space at top
+
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                const x = gridStartX + col * cellSize;
+                const y = gridStartY + row * cellSize;
+
+                const isRevealed = minesweeperMinigame.revealed[row][col];
+                const isFlagged = minesweeperMinigame.flagged[row][col];
+                const isMine = minesweeperMinigame.grid[row][col];
+
+                // Draw cell background
+                if (isRevealed) {
+                  if (isMine) {
+                    // Mine cell - red background
+                    ctx.fillStyle = '#ff0000';
+                  } else {
+                    // Revealed safe cell - light gray
+                    ctx.fillStyle = '#cccccc';
+                  }
+                } else {
+                  // Unrevealed cell - dark gray
+                  ctx.fillStyle = '#666666';
+                }
+                ctx.fillRect(x, y, cellSize - 2, cellSize - 2);
+
+                // Draw border
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, cellSize - 2, cellSize - 2);
+
+                // Draw content
+                if (isFlagged && !isRevealed) {
+                  // Draw dirt tile sprite first (background)
+                  if (
+                    dirtTileSprite.complete &&
+                    dirtTileSprite.naturalWidth > 0
+                  ) {
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(
+                      dirtTileSprite,
+                      x + 1,
+                      y + 1,
+                      cellSize - 4,
+                      cellSize - 4
+                    );
+                  }
+                  // Then draw flag sprite on top
+                  if (flagSprite.complete && flagSprite.naturalWidth > 0) {
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(
+                      flagSprite,
+                      x + 2,
+                      y + 2,
+                      cellSize - 6,
+                      cellSize - 6
+                    );
+                  } else {
+                    // Fallback flag
+                    ctx.fillStyle = '#ff0000';
+                    ctx.beginPath();
+                    ctx.moveTo(x + cellSize / 2, y + 5);
+                    ctx.lineTo(x + cellSize / 2, y + cellSize - 8);
+                    ctx.lineTo(x + cellSize / 2 - 3, y + cellSize - 5);
+                    ctx.lineTo(x + cellSize / 2 + 3, y + cellSize - 5);
+                    ctx.closePath();
+                    ctx.fill();
+                  }
+                } else if (isRevealed) {
+                  if (isMine) {
+                    // Draw mine (X or filled circle)
+                    ctx.fillStyle = '#000000';
+                    ctx.beginPath();
+                    ctx.arc(
+                      x + cellSize / 2,
+                      y + cellSize / 2,
+                      cellSize / 4,
+                      0,
+                      Math.PI * 2
+                    );
+                    ctx.fill();
+                  } else {
+                    // Draw number (adjacent mine count)
+                    const count = countAdjacentMines(
+                      minesweeperMinigame,
+                      row,
+                      col
+                    );
+                    if (count > 0) {
+                      ctx.fillStyle = '#000000';
+                      ctx.font =
+                        'bold 16px ui-monospace, Menlo, Consolas, monospace';
+                      ctx.textAlign = 'center';
+                      ctx.textBaseline = 'middle';
+                      ctx.fillText(
+                        count.toString(),
+                        x + cellSize / 2,
+                        y + cellSize / 2
+                      );
+                    }
+                  }
+                } else {
+                  // Draw dirt tile sprite for unrevealed cells
+                  if (
+                    dirtTileSprite.complete &&
+                    dirtTileSprite.naturalWidth > 0
+                  ) {
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(
+                      dirtTileSprite,
+                      x + 1,
+                      y + 1,
+                      cellSize - 4,
+                      cellSize - 4
+                    );
+                  }
+                }
+              }
+            }
+
+            // Draw status message
+            if (minesweeperMinigame.gameOver) {
+              ctx.fillStyle = '#ff0000';
+              ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
+              ctx.fillText(
+                'Game Over!',
+                canvas.width / 2,
+                panelY + panelHeight - 30
+              );
+            } else if (minesweeperMinigame.won) {
+              ctx.fillStyle = '#00ff00';
+              ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
+              ctx.fillText(
+                'You Win!',
+                canvas.width / 2,
+                panelY + panelHeight - 30
+              );
+            } else {
+              ctx.fillStyle = '#ffffff';
+              ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
+              ctx.fillText(
+                'Left click to reveal, Right click to flag',
+                canvas.width / 2,
+                panelY + panelHeight - 30
+              );
+            }
+
+            ctx.restore();
+          }
+
           // Draw inventory menu
           if (inventory.open) {
             drawInventory();
@@ -4813,6 +4839,7 @@
             systemMessage.text ||
             (tutorial.active && dayTime.currentDay === 0) ||
             oldGuy.dialogue ||
+            joseph.dialogue ||
             curator.dialogue
           ) {
             drawDialogueBox();
@@ -5377,6 +5404,8 @@
             characterName = 'Candy Kid';
           } else if (oldGuy.dialogue) {
             characterName = 'Uncle Bernie';
+          } else if (joseph.dialogue) {
+            characterName = 'Joseph';
           } else if (curator.dialogue) {
             characterName = 'Museum Curator';
           }
@@ -5406,7 +5435,7 @@
             ? systemMessage.text
             : tutorial.active
             ? tutorial.dialogue
-            : oldGuy.dialogue || curator.dialogue || '';
+            : oldGuy.dialogue || joseph.dialogue || curator.dialogue || '';
           const words = dialogueText.split(' ');
           let line = '';
           // Start text below character name and line (add extra space if name exists)
@@ -5456,20 +5485,6 @@
               name: 'Chocolate Bar',
               sprite: chocolateBarSprite,
               description: 'Speeds up your movement',
-            },
-            {
-              name: 'Speed Brush',
-              sprite: speedBrushSprite,
-              description: 'Makes brushing minigame easier',
-            },
-            {
-              name: 'Artifact Tool',
-              sprite: inventory.artifactEquipment
-                ? inventory.artifactEquipment.sprite
-                : null,
-              description: inventory.artifactEquipment
-                ? inventory.artifactEquipment.name
-                : 'No artifact tool equipped',
             },
           ];
 
@@ -5566,12 +5581,6 @@
               // Chocolate bars are stored in equipment slot with count
               isOwned = inventory.chocolateBarCount > 0;
               itemCount = inventory.chocolateBarCount;
-            } else if (item.name === 'Speed Brush') {
-              // Speed Brush is in equipment slot only
-              isOwned = inventory.speedBrush;
-            } else if (item.name === 'Artifact Tool') {
-              // Artifact tool slot
-              isOwned = inventory.artifactEquipment !== null;
             }
 
             // Check if hovering (only show description if owned)
