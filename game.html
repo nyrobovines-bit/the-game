@@ -47,6 +47,7 @@
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35),
           inset 0 0 0 1px rgba(255, 255, 255, 0.03);
         image-rendering: -moz-crisp-edges;
+        image-rendering: -webkit-optimize-contrast;
         image-rendering: pixelated;
         image-rendering: crisp-edges;
         max-width: 100%;
@@ -87,7 +88,15 @@
     <script>
       (function () {
         const canvas = document.getElementById('game');
+        if (!canvas) {
+          console.error('Game canvas element not found!');
+          return;
+        }
         const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          console.error('Failed to get 2d context from game canvas!');
+          return;
+        }
         ctx.imageSmoothingEnabled = false; // Disable smoothing for crisp pixel art
 
         const world = {
@@ -120,6 +129,7 @@
         const loadingFacts = [
           'Did you know honey never spoils? Archaeologists have found 3,000 year old honey in Egyptian tombs that is still safe to eat!',
           'The oldest urban civilization is Sumer, settled around 4500 B.C.!',
+          'The oldest tools ever found were in Kenya, dating back to 3.3 Million years ago!',
         ];
 
         // Loading screen state
@@ -127,7 +137,7 @@
           progress: 0,
           displayProgress: 0, // Smoothed progress for visual display
           loadingTimer: 0, // Timer tracking how long we've been loading
-          fillDuration: 8000, // Progress bar fills over 8 seconds
+          fillDuration: 7500, // Progress bar fills over 7.5 seconds
           allLoaded: false,
           postLoadTimer: 0,
           postLoadDelay: 0, // No additional delay - bar fill time is the delay
@@ -230,18 +240,22 @@
             // Progress text (use displayProgress to match the bar)
             ctx.fillStyle = '#ffffff';
             ctx.font = '16px ui-monospace, Menlo, Consolas, monospace';
-            const percentText =
-              Math.round((loadingState.displayProgress || 0) * 100) + '%';
+            // Clamp percent to 0-100 so it never shows negative values
+            const percentValue = Math.min(
+              Math.max(loadingState.displayProgress || 0, 0),
+              1
+            );
+            const percentText = Math.round(percentValue * 100) + '%';
             ctx.fillText(percentText, canvas.width / 2, barY + barHeight + 30);
 
             // Display fact below progress (if we have one)
             if (loadingState.currentFact) {
-              ctx.fillStyle = '#cccccc'; // Slightly dimmer than white
-              ctx.font = '14px ui-monospace, Menlo, Consolas, monospace';
+              ctx.fillStyle = '#e6e6e6'; // Light white for readability
+              ctx.font = '18px ui-monospace, Menlo, Consolas, monospace';
               // Word wrap the fact text so it fits nicely on screen
               // Max width for text wrapping
               const maxWidth = canvas.width - 100; // Leave 50px padding on each side
-              const lineHeight = 20;
+              const lineHeight = 24;
               const factY = barY + barHeight + 70; // Below progress text
 
               // Split text into lines that fit within maxWidth
@@ -292,8 +306,8 @@
 
         // Day/Time system
         const dayTime = {
-          currentDay: 0, // 0 = Monday, 1 = Tuesday, ..., 6 = Sunday
-          currentHour: 17, // Current hour (set to 17 for testing - near end of day)
+          currentDay: 1, // 0 = Monday, 1 = Tuesday, ..., 6 = Sunday (set to 1 for testing)
+          currentHour: 8, // Current hour (set to 8 for testing - start of day)
           hourTimer: 0, // Timer that accumulates seconds, resets when >= 45
           secondsPerHour: 45, // Each in-game hour = 45 seconds
           dayEndHour: 18, // 6 PM (day ends when hour reaches this)
@@ -428,22 +442,7 @@
           completed: false,
           broken: false,
           isSecretX: false, // Track if this minigame came from a secret X tile
-        };
-
-        const declarationMinigame = {
-          active: false,
-          baseReward: 50,
-          penalty: 30,
-          tileRow: null,
-          tileCol: null,
-          realExcerpt:
-            'We hold these truths to be self-evident, that all men are created equal, that they are endowed by their Creator with certain unalienable Rights, that among these are Life, Liberty and the pursuit of Happiness.',
-          testExcerpt: '',
-          isFake: false,
-          answered: false,
-          wasCorrect: false,
-          actualReward: 0,
-          isSecretX: false, // Track if this minigame came from a secret X tile
+          showInstructions: false, // Track if question mark was clicked to show instructions
         };
 
         const minesweeperMinigame = {
@@ -461,23 +460,64 @@
           tileCol: null,
           isSecretX: false,
           baseReward: 10,
+          showInstructions: false, // Track if question mark was clicked to show instructions
         };
 
-        // Typo minigame - Thomas Paine's Common Sense
+        // Typo minigame documents with their possible typos
+        const typoDocuments = [
+          {
+            // Declaration of Independence
+            realExcerpt:
+              'We hold these truths to be self-evident, that all men are created equal, that they are endowed by their Creator with certain unalienable Rights, that among these are Life, Liberty and the pursuit of Happiness.',
+            typoOptions: [
+              { from: 'certain', to: 'sertain' },
+              { from: 'self-evident', to: 'Celf-Evident' },
+              { from: 'created', to: 'Craeted' },
+              { from: 'unalienable', to: 'Unaliable' },
+              { from: 'pursuit', to: 'Persuit' },
+            ],
+          },
+          {
+            // Thomas Paine's Common Sense
+            realExcerpt:
+              'Some writers have so confounded society with government, as to leave little or no distinction between them; whereas they are not only different, but have different origins. Society is produced by our wants, and government by our wickedness; the former promotes our happiness possitively by uniting our affections, the latter negatively by restraining our vices.',
+            typoOptions: [
+              { from: 'confounded', to: 'confoded' },
+              { from: 'government', to: 'govement' },
+              { from: 'distinction', to: 'disticon' },
+              { from: 'wants', to: 'wahts' },
+              { from: 'possitively', to: 'posetively' },
+            ],
+          },
+          {
+            // Declaration of Confederacy
+            realExcerpt:
+              'And now the State of South Carolina having resumed her separate and equal place among nations, deems it due to herself, to the remaining United States of America, and to the nations of the world, that she should declare the immediate causes which have led to this act.',
+            typoOptions: [
+              { from: 'America', to: 'amaraca' },
+              { from: 'Carolina', to: 'Carilona' },
+              { from: 'immediate', to: 'amedeate' },
+              { from: 'nations', to: 'naetons' },
+              { from: 'deems', to: 'dooms' },
+            ],
+          },
+        ];
+
+        // Typo minigame - randomly selects from typoDocuments
         const typoMinigame = {
           active: false,
           baseReward: 50,
           penalty: 30,
           tileRow: null,
           tileCol: null,
-          realExcerpt:
-            'Some writers have so confounded society with government, as to leave little or no distinction between them; whereas they are not only different, but have different origins. Society is produced by our wants, and government by our wickedness; the former promotes our happiness possitively by uniting our affections, the latter negatively by restraining our vices.',
+          realExcerpt: '',
           testExcerpt: '',
           isFake: false,
           answered: false,
           wasCorrect: false,
           actualReward: 0,
           isSecretX: false, // Track if this minigame came from a secret X tile
+          selectedTypo: null, // Store which typo was selected for highlighting
         };
 
         // Optimize sprite loading: set imageSmoothingEnabled before src for faster rendering
@@ -534,56 +574,66 @@
         // Function to regenerate tiles that use sprites (optimized - only regenerates when needed)
         // Deferred to avoid blocking the main thread during load
         let tileRegenerationScheduled = false;
-        function regenerateTiles() {
-          // Defer regeneration to avoid blocking during sprite load
-          if (tileRegenerationScheduled) return;
-          tileRegenerationScheduled = true;
+        function regenerateTiles(immediate = false) {
+          // If immediate flag is set, regenerate synchronously (for restarts)
+          // Otherwise defer regeneration to avoid blocking during sprite load
+          if (!immediate) {
+            if (tileRegenerationScheduled) return;
+            tileRegenerationScheduled = true;
 
-          // Use requestAnimationFrame to defer to next frame, allowing page to be interactive
-          requestAnimationFrame(() => {
-            // Check if tileMap exists (it's created later in the code)
-            if (typeof tileMap === 'undefined') {
-              return; // tileMap not created yet, skip regeneration
-            }
+            // Use requestAnimationFrame to defer to next frame, allowing page to be interactive
+            requestAnimationFrame(() => {
+              doRegenerateTiles();
+              tileRegenerationScheduled = false;
+            });
+          } else {
+            // Immediate regeneration (synchronous)
+            doRegenerateTiles();
+          }
+        }
 
-            // Only regenerate tiles that use sprites (grass, flowers, and tiles with grass base)
-            const spriteTileNames = [
-              'grass',
-              'moundedBush',
-              'singleRock',
-              'rockCluster',
-              'redX',
-              'secretX',
-              'logRows',
-            ];
+        function doRegenerateTiles() {
+          // Check if tileMap exists (it's created later in the code)
+          if (typeof tileMap === 'undefined') {
+            return; // tileMap not created yet, skip regeneration
+          }
 
-            for (let row = 0; row < tileRows; row++) {
-              for (let col = 0; col < tileCols; col++) {
-                const tile = tileMap[row][col];
-                if (tile && spriteTileNames.includes(tile.name)) {
-                  // Find the original tile definition
-                  const def = tileDefinitions.find((d) => d.name === tile.name);
-                  if (def) {
-                    // Regenerate the canvas with the now-loaded sprites
-                    // Preserve rotation for grass tiles
-                    const oldTile = tileMap[row][col];
-                    const rotation =
-                      oldTile && oldTile.grassRotation !== undefined
-                        ? oldTile.grassRotation
-                        : 0;
-                    tileMap[row][col] = {
-                      name: def.name,
-                      canvas: createTileCanvas((ctx) =>
-                        def.draw(ctx, rotation)
-                      ),
-                      grassRotation: rotation, // Preserve rotation
-                    };
-                  }
+          // Only regenerate tiles that use sprites (grass, flowers, and tiles with grass base)
+          const spriteTileNames = [
+            'grass',
+            'moundedBush',
+            'singleRock',
+            'rockCluster',
+            'redX',
+            'secretX',
+            'logRows',
+          ];
+
+          for (let row = 0; row < tileRows; row++) {
+            for (let col = 0; col < tileCols; col++) {
+              const tile = tileMap[row][col];
+              if (tile && spriteTileNames.includes(tile.name)) {
+                // Find the original tile definition
+                const def = tileDefinitions.find((d) => d.name === tile.name);
+                if (def) {
+                  // Regenerate the canvas with the now-loaded sprites
+                  // Preserve rotation for grass tiles
+                  const oldTile = tileMap[row][col];
+                  const rotation =
+                    oldTile && oldTile.grassRotation !== undefined
+                      ? oldTile.grassRotation
+                      : 0;
+                  tileMap[row][col] = {
+                    name: def.name,
+                    canvas: createTileCanvas((ctx) =>
+                      def.draw(ctx, rotation)
+                    ),
+                    grassRotation: rotation, // Preserve rotation
+                  };
                 }
               }
             }
-            tileRegenerationScheduled = false;
-          });
+          }
         }
 
         // Regenerate tiles when grass sprite loads (deferred)
@@ -638,6 +688,10 @@
         curatorSprite.imageSmoothingEnabled = false;
         curatorSprite.src = 'assets/sprites/Museum_Curator.png';
 
+        const cannonBuffSprite = new Image();
+        cannonBuffSprite.imageSmoothingEnabled = false;
+        cannonBuffSprite.src = 'assets/sprites/Cannon_buff.png';
+
         // Vending Machine sprite (kept for potential future use)
         // const vendingMachineSprite = new Image();
         // vendingMachineSprite.imageSmoothingEnabled = false;
@@ -683,6 +737,10 @@
         const wallDoorSprite = new Image();
         wallDoorSprite.imageSmoothingEnabled = false;
         wallDoorSprite.src = 'assets/sprites/Wall_Door.png';
+
+        const cannonDisplaySprite = new Image();
+        cannonDisplaySprite.imageSmoothingEnabled = false;
+        cannonDisplaySprite.src = 'assets/sprites/Cannon_display.png';
 
         // Load player sprites from PNG images
         const playerSpriteIdle = new Image();
@@ -738,21 +796,33 @@
           buffer.width = tileSize + overlap;
           buffer.height = tileSize + overlap;
           const bctx = buffer.getContext('2d');
+          if (!bctx) {
+            console.error('Failed to get 2d context for tile canvas');
+            return buffer; // Return empty canvas if context creation fails
+          }
           // Disable image smoothing for pixel art
           bctx.imageSmoothingEnabled = false;
           // Draw the tile content (drawFn draws in the tileSize x tileSize area)
           drawFn(bctx);
-          // Copy the rightmost column (column tileSize - 1) to the overlap column (column tileSize)
-          // This creates seamless tiling: when adjacent tiles are drawn, they overlap by 1px
-          // The rightmost pixel of each tile is the same as the leftmost visible pixel of the next tile
-          const rightEdge = bctx.getImageData(tileSize - 1, 0, 1, tileSize);
-          bctx.putImageData(rightEdge, tileSize, 0);
-          // Copy the bottommost row (row tileSize - 1) to the overlap row (row tileSize)
-          const bottomEdge = bctx.getImageData(0, tileSize - 1, tileSize, 1);
-          bctx.putImageData(bottomEdge, 0, tileSize);
-          // Copy the corner pixel for the bottom-right overlap
-          const corner = bctx.getImageData(tileSize - 1, tileSize - 1, 1, 1);
-          bctx.putImageData(corner, tileSize, tileSize);
+          // Copy edges for seamless tiling (only if not blocked by CORS)
+          // When loading from file:// URLs, getImageData can fail due to CORS restrictions
+          // Wrap in try-catch to handle gracefully
+          try {
+            // Copy the rightmost column (column tileSize - 1) to the overlap column (column tileSize)
+            // This creates seamless tiling: when adjacent tiles are drawn, they overlap by 1px
+            // The rightmost pixel of each tile is the same as the leftmost visible pixel of the next tile
+            const rightEdge = bctx.getImageData(tileSize - 1, 0, 1, tileSize);
+            bctx.putImageData(rightEdge, tileSize, 0);
+            // Copy the bottommost row (row tileSize - 1) to the overlap row (row tileSize)
+            const bottomEdge = bctx.getImageData(0, tileSize - 1, tileSize, 1);
+            bctx.putImageData(bottomEdge, 0, tileSize);
+            // Copy the corner pixel for the bottom-right overlap
+            const corner = bctx.getImageData(tileSize - 1, tileSize - 1, 1, 1);
+            bctx.putImageData(corner, tileSize, tileSize);
+          } catch (e) {
+            // CORS error when loading from file:// URLs - skip edge copying
+            // Tiles will still work, just without 1px overlap seam elimination
+          }
           return buffer;
         }
 
@@ -825,6 +895,9 @@
                 } else {
                   ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
                 }
+              } else {
+                // Fallback: draw grass base color if sprite not loaded yet
+                paintGrassBase(ctx);
               }
             },
           },
@@ -851,6 +924,9 @@
               ctx.imageSmoothingEnabled = false;
               if (grassSprite.complete && grassSprite.naturalWidth > 0) {
                 ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              } else {
+                // Fallback: draw grass base color if sprite not loaded yet
+                paintGrassBase(ctx);
               }
               // Draw Rock_2 sprite on top of grass
               if (rock2Sprite.complete && rock2Sprite.naturalWidth > 0) {
@@ -881,6 +957,9 @@
               ctx.imageSmoothingEnabled = false;
               if (grassSprite.complete && grassSprite.naturalWidth > 0) {
                 ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              } else {
+                // Fallback: draw grass base color if sprite not loaded yet
+                paintGrassBase(ctx);
               }
               // Draw tall grass sprite instead of logs
               // Position tall grass sprite in the center of the tile
@@ -916,6 +995,9 @@
               ctx.imageSmoothingEnabled = false;
               if (grassSprite.complete && grassSprite.naturalWidth > 0) {
                 ctx.drawImage(grassSprite, 0, 0, tileSize, tileSize);
+              } else {
+                // Fallback: draw grass base color if sprite not loaded yet
+                paintGrassBase(ctx);
               }
               // Draw yellow X sprite only if radar is active
               // This makes secret X tiles invisible unless player has radar
@@ -1118,6 +1200,17 @@
           dialogueTimer: 0, // Timer for auto-closing dialogue
         };
 
+        // Cannon Buff NPC (positioned in museum, next to cannon display)
+        const cannonBuff = {
+          x: 0, // Will be set in initializeMuseum
+          y: 0, // Will be set in initializeMuseum
+          radius: 20,
+          dialogue: null, // Current dialogue text
+          dialogueStage: 0, // Dialogue stage (0-4 for intro, 0 for repeat)
+          dialogueTimer: 0, // Timer for auto-closing dialogue
+          hasCompletedIntro: false, // Track if player has seen initial dialogue
+        };
+
         // Inventory system
         const inventory = {
           open: false,
@@ -1173,8 +1266,8 @@
               // Don't allow opening inventory during minigame or game over
               if (
                 brushingMinigame.active ||
-                declarationMinigame.active ||
                 minesweeperMinigame.active ||
+                typoMinigame.active ||
                 gameOver.active
               ) {
                 return;
@@ -1195,8 +1288,8 @@
               if (
                 crouchAnimation.active ||
                 brushingMinigame.active ||
-                declarationMinigame.active ||
-                minesweeperMinigame.active
+                minesweeperMinigame.active ||
+                typoMinigame.active
               ) {
                 return;
               }
@@ -1215,7 +1308,8 @@
                 systemMessage.text ||
                 oldGuy.dialogue ||
                 joseph.dialogue ||
-                curator.dialogue
+                curator.dialogue ||
+                cannonBuff.dialogue
               ) {
                 // System messages can always be closed with spacebar
                 if (systemMessage.text) {
@@ -1230,6 +1324,10 @@
                   player.vy = 0;
                 } else if (curator.dialogue) {
                   advanceCuratorDialogue();
+                  player.vx = 0;
+                  player.vy = 0;
+                } else if (cannonBuff.dialogue) {
+                  advanceCannonBuffDialogue();
                   player.vx = 0;
                   player.vy = 0;
                 }
@@ -1271,7 +1369,7 @@
 
             // Shop controls removed - now uses mouse clicks only
 
-            // Declaration minigame: Removed keyboard controls, now uses buttons
+            // Typo minigame: Uses buttons (merged with declaration minigame)
 
             // Day end: Space to continue to next day
             if (gameState === 'dayEnd' && e.code === 'Space') {
@@ -1284,10 +1382,15 @@
             if (gameState === 'weekEnd' && e.code === 'Space') {
               e.preventDefault();
               gameState = 'title';
-              // Reset everything for new game
+              // Reset everything for new game (will be fully reset when starting from title)
               dayTime.currentDay = 0; // Start on Monday
               dayTime.currentHour = 8; // Start at 8:00 AM
               dayTime.hourTimer = 0;
+              // Reset museum state
+              museum.doorPrompt = false;
+              museum.wasNearDoor = false;
+              museum.buildMode = false;
+              gameOver.active = false;
               return;
             }
 
@@ -1296,11 +1399,25 @@
               e.preventDefault();
               // Reset game state
               gameOver.active = false;
+              // Reset day/time
+              dayTime.currentDay = 0;
+              dayTime.currentHour = 8;
+              dayTime.hourTimer = 0;
               // Reset player position
               player.x = world.width / 2;
               player.y = world.height - 40;
               player.vx = 0;
               player.vy = 0;
+              // Reset camera
+              camera.x = player.x;
+              camera.y = player.y;
+              // Regenerate tiles and ensure sprites are loaded
+              tileMap = generateTiles();
+              tileRegenerationScheduled = false; // Reset flag to allow regeneration
+              // Force immediate regeneration to ensure all sprite-based tiles are properly rendered
+              doRegenerateTiles(); // Call directly to ensure it happens synchronously
+              // Reset game state
+              gameState = 'playing';
             }
           },
           { passive: false }
@@ -1330,14 +1447,15 @@
             const y = (e.clientY - rect.top) * scaleY;
 
             const gridSize = minesweeperMinigame.gridSize;
-            const cellSize = 40;
-            const panelWidth = gridSize * cellSize + 80; // Match render function
-            const panelHeight = gridSize * cellSize + 140; // Match render function
+            const cellSize = 50; // Match render function (increased from 40)
+            const panelPadding = 40;
+            const gridAreaSize = gridSize * cellSize;
+            const panelWidth = gridAreaSize + panelPadding * 2;
+            const panelHeight = panelWidth; // Square panel
             const panelX = (canvas.width - panelWidth) / 2;
             const panelY = (canvas.height - panelHeight) / 2;
-            const gridWidth = gridSize * cellSize;
-            const gridStartX = panelX + (panelWidth - gridWidth) / 2;
-            const gridStartY = panelY + 50; // Match render function
+            const gridStartX = panelX + panelPadding;
+            const gridStartY = panelY + panelPadding;
 
             // Check if click is within grid bounds
             if (
@@ -1417,8 +1535,8 @@
             }
           }
 
-          // Declaration minigame buttons
-          if (declarationMinigame.active && !declarationMinigame.answered) {
+          // Typo minigame buttons (handles all text-based minigames)
+          if (typoMinigame.active && !typoMinigame.answered) {
             // Calculate button positions (same as in render function)
             const panelWidth = 700;
             const panelHeight = 500;
@@ -1440,7 +1558,7 @@
               y >= buttonY &&
               y <= buttonY + buttonHeight
             ) {
-              handleDeclarationAnswer(true); // Display = Real
+              handleTypoAnswer(true); // Display = Real
               return;
             }
 
@@ -1452,15 +1570,61 @@
               y >= buttonY &&
               y <= buttonY + buttonHeight
             ) {
-              handleDeclarationAnswer(false); // Throw away = Fake
+              handleTypoAnswer(false); // Throw away = Fake
               return;
             }
 
             // Close button removed
           }
 
-          // Build mode click handling (place artifacts in display cases)
+          // Build mode click handling (select artifacts and place in display cases)
           if (gameState === 'museum' && museum.buildMode) {
+            // First, check if player clicked the build mode inventory panel
+            const buildLayout = getBuildModeInventoryLayout();
+            if (
+              x >= buildLayout.panelX &&
+              x <= buildLayout.panelX + buildLayout.panelWidth &&
+              y >= buildLayout.panelY &&
+              y <= buildLayout.panelY + buildLayout.panelHeight
+            ) {
+              const slotSize = buildLayout.slotSize;
+              const slotSpacing = buildLayout.slotSpacing;
+              const slotsStartX = buildLayout.slotsStartX;
+              const slotsStartY = buildLayout.slotsStartY;
+              const slotsPerRow = buildLayout.slotsPerRow;
+              const rows = buildLayout.rows;
+
+              // Check if click is inside the slots grid area
+              const slotsWidth =
+                slotsPerRow * slotSize + (slotsPerRow - 1) * slotSpacing;
+              const slotsHeight = rows * slotSize + (rows - 1) * slotSpacing;
+
+              if (
+                x >= slotsStartX &&
+                x <= slotsStartX + slotsWidth &&
+                y >= slotsStartY &&
+                y <= slotsStartY + slotsHeight
+              ) {
+                const col = Math.floor(
+                  (x - slotsStartX) / (slotSize + slotSpacing)
+                );
+                const row = Math.floor(
+                  (y - slotsStartY) / (slotSize + slotSpacing)
+                );
+                const index = row * slotsPerRow + col;
+                const artifacts = buildLayout.artifacts;
+
+                if (index >= 0 && index < artifacts.length) {
+                  // Select this artifact (store the real inventory slot index)
+                  museum.selectedArtifactIndex = artifacts[index].slotIndex;
+                } else {
+                  // Clicked an empty slot -> clear selection
+                  museum.selectedArtifactIndex = null;
+                }
+              }
+              return;
+            }
+
             const museumTileSize = tileSize;
             const museumWorldWidth = museum.width * museumTileSize;
             const museumWorldHeight = museum.height * museumTileSize;
@@ -1488,21 +1652,37 @@
                   displayCase.row === clickedRow &&
                   displayCase.col === clickedCol
                 ) {
-                  // Clicked on a display case - if it's empty, try to place an artifact
-                  if (!displayCase.artifact) {
-                    // Find first artifact in inventory
-                    for (let j = 0; j < inventory.slots.length; j++) {
-                      const item = inventory.slots[j];
-                      if (item && item.type === 'artifact') {
-                        // Place artifact in display case
-                        displayCase.artifact = {
-                          name: item.name,
-                          sprite: item.sprite,
-                        };
-                        // Remove from inventory
-                        inventory.slots[j] = null;
-                        return;
-                      }
+                  // Clicked on a display case
+                  if (displayCase.artifact) {
+                    // Try to remove artifact back into inventory
+                    const added = addItemToInventory(
+                      displayCase.artifact.name,
+                      displayCase.artifact.sprite
+                    );
+                    if (added) {
+                      displayCase.artifact = null;
+                      museum.selectedArtifactIndex = null;
+                    }
+                  } else {
+                    // Place the selected artifact if possible
+                    const selectedIndex = museum.selectedArtifactIndex;
+                    const selectedItem =
+                      selectedIndex !== null
+                        ? inventory.slots[selectedIndex]
+                        : null;
+
+                    if (selectedItem && selectedItem.type === 'artifact') {
+                      // Place artifact in display case
+                      displayCase.artifact = {
+                        name: selectedItem.name,
+                        sprite: selectedItem.sprite,
+                        tier:
+                          selectedItem.tier ||
+                          getArtifactTier(selectedItem.name),
+                      };
+                      // Remove from inventory and clear selection
+                      inventory.slots[selectedIndex] = null;
+                      museum.selectedArtifactIndex = null;
                     }
                   }
                   break;
@@ -1552,34 +1732,111 @@
           }
 
           // Minesweeper minigame clicks (left click)
-          if (
-            minesweeperMinigame.active &&
-            !minesweeperMinigame.gameOver &&
-            !minesweeperMinigame.won
-          ) {
-            const gridSize = minesweeperMinigame.gridSize;
-            const cellSize = 40;
-            const panelWidth = gridSize * cellSize + 80; // Match render function
-            const panelHeight = gridSize * cellSize + 140; // Match render function
-            const panelX = (canvas.width - panelWidth) / 2;
-            const panelY = (canvas.height - panelHeight) / 2;
-            const gridWidth = gridSize * cellSize;
-            const gridStartX = panelX + (panelWidth - gridWidth) / 2;
-            const gridStartY = panelY + 50; // Match render function
-
-            // Check if click is within grid bounds
+          if (minesweeperMinigame.active) {
+            // Check for question mark click first (works even when game is over/won)
+            const questionMarkX = 15;
+            const questionMarkY = canvas.height - 15;
+            const questionMarkSize = 20;
             if (
-              x >= gridStartX &&
-              x <= gridStartX + gridSize * cellSize &&
-              y >= gridStartY &&
-              y <= gridStartY + gridSize * cellSize
+              x >= questionMarkX - 5 &&
+              x <= questionMarkX + questionMarkSize + 5 &&
+              y >= questionMarkY - questionMarkSize - 5 &&
+              y <= questionMarkY + 5
             ) {
-              const col = Math.floor((x - gridStartX) / cellSize);
-              const row = Math.floor((y - gridStartY) / cellSize);
+              // Toggle instructions
+              minesweeperMinigame.showInstructions = !minesweeperMinigame.showInstructions;
+              return;
+            }
 
-              if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
-                handleMinesweeperClick(minesweeperMinigame, row, col, false);
+            // If instructions are showing, close them on any click (except question mark)
+            if (minesweeperMinigame.showInstructions) {
+              // Check if click is outside the instructions panel
+              const instructionsPanelWidth = 400;
+              const instructionsPanelHeight = 200;
+              const instructionsPanelX = (canvas.width - instructionsPanelWidth) / 2;
+              const instructionsPanelY = (canvas.height - instructionsPanelHeight) / 2;
+              
+              if (
+                x < instructionsPanelX ||
+                x > instructionsPanelX + instructionsPanelWidth ||
+                y < instructionsPanelY ||
+                y > instructionsPanelY + instructionsPanelHeight
+              ) {
+                // Clicked outside instructions panel - close it
+                minesweeperMinigame.showInstructions = false;
+                return;
               }
+              // Clicked inside instructions panel - don't do anything (let it stay open)
+              return;
+            }
+
+            // Only handle grid clicks if game is active (not over/won)
+            if (!minesweeperMinigame.gameOver && !minesweeperMinigame.won) {
+              const gridSize = minesweeperMinigame.gridSize;
+              const cellSize = 50; // Match render function
+              const panelPadding = 40;
+              const gridAreaSize = gridSize * cellSize;
+              const panelWidth = gridAreaSize + panelPadding * 2;
+              const panelHeight = panelWidth; // Square panel
+              const panelX = (canvas.width - panelWidth) / 2;
+              const panelY = (canvas.height - panelHeight) / 2;
+              const gridStartX = panelX + panelPadding;
+              const gridStartY = panelY + panelPadding;
+
+              // Check if click is within grid bounds
+              if (
+                x >= gridStartX &&
+                x <= gridStartX + gridSize * cellSize &&
+                y >= gridStartY &&
+                y <= gridStartY + gridSize * cellSize
+              ) {
+                const col = Math.floor((x - gridStartX) / cellSize);
+                const row = Math.floor((y - gridStartY) / cellSize);
+
+                if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
+                  handleMinesweeperClick(minesweeperMinigame, row, col, false);
+                }
+              }
+            }
+          }
+
+          // Brushing minigame clicks
+          if (brushingMinigame.active) {
+            // Check for question mark click first
+            const questionMarkX = 15;
+            const questionMarkY = canvas.height - 15;
+            const questionMarkSize = 20;
+            if (
+              x >= questionMarkX - 5 &&
+              x <= questionMarkX + questionMarkSize + 5 &&
+              y >= questionMarkY - questionMarkSize - 5 &&
+              y <= questionMarkY + 5
+            ) {
+              // Toggle instructions
+              brushingMinigame.showInstructions = !brushingMinigame.showInstructions;
+              return;
+            }
+
+            // If instructions are showing, close them on any click (except question mark)
+            if (brushingMinigame.showInstructions) {
+              // Check if click is outside the instructions panel
+              const instructionsPanelWidth = 400;
+              const instructionsPanelHeight = 200;
+              const instructionsPanelX = (canvas.width - instructionsPanelWidth) / 2;
+              const instructionsPanelY = (canvas.height - instructionsPanelHeight) / 2;
+              
+              if (
+                x < instructionsPanelX ||
+                x > instructionsPanelX + instructionsPanelWidth ||
+                y < instructionsPanelY ||
+                y > instructionsPanelY + instructionsPanelHeight
+              ) {
+                // Clicked outside instructions panel - close it
+                brushingMinigame.showInstructions = false;
+                return;
+              }
+              // Clicked inside instructions panel - don't do anything (let it stay open)
+              return;
             }
           }
 
@@ -1732,6 +1989,13 @@
           curator.x = museumTileSize * 2; // Left side, 2 tiles from edge
           curator.y = museumWorldHeight - museumTileSize * 2; // Bottom, 2 tiles from edge
 
+          // Position cannonBuff next to cannon display (to the right of right cannon)
+          // Cannons are at row 6 (0-indexed), cols 7-8
+          const cannonRow = Math.floor(museum.height / 2) - 2; // Row 6
+          const rightCannonCol = Math.floor(museum.width / 2); // Col 8
+          cannonBuff.x = (rightCannonCol + 2) * museumTileSize; // 2 tiles to the right of right cannon
+          cannonBuff.y = cannonRow * museumTileSize; // Same row as cannons
+
           // Position camera to place museum at bottom middle of screen
           camera.x = museumWorldWidth / 2; // Center horizontally (160 for 320px wide museum)
           // Position camera so museum appears at bottom of screen
@@ -1754,13 +2018,24 @@
           museum.wasNearDoor = false;
           museum.buildMode = false;
 
-          // Initialize display cases around the outer edges of the museum (fewer cases - just top edge)
+          // Initialize display cases along the walls (top, left, right)
+          // Keep them away from corners so the room feels less cramped
           museum.displayCases = [];
-          // Top edge only: row 1, just a few cases (corners and middle)
-          museum.displayCases.push({ row: 1, col: 2, artifact: null });
+          // Top wall cases (row 1 = inside the top wall)
+          museum.displayCases.push({ row: 1, col: 3, artifact: null });
           museum.displayCases.push({ row: 1, col: 6, artifact: null });
-          museum.displayCases.push({ row: 1, col: 10, artifact: null });
-          museum.displayCases.push({ row: 1, col: 13, artifact: null });
+          museum.displayCases.push({ row: 1, col: 9, artifact: null });
+          museum.displayCases.push({ row: 1, col: 12, artifact: null });
+          // Left wall cases (col 1 = inside the left wall)
+          museum.displayCases.push({ row: 3, col: 1, artifact: null });
+          museum.displayCases.push({ row: 6, col: 1, artifact: null });
+          museum.displayCases.push({ row: 9, col: 1, artifact: null });
+          museum.displayCases.push({ row: 12, col: 1, artifact: null });
+          // Right wall cases (col 14 = inside the right wall)
+          museum.displayCases.push({ row: 3, col: 14, artifact: null });
+          museum.displayCases.push({ row: 6, col: 14, artifact: null });
+          museum.displayCases.push({ row: 9, col: 14, artifact: null });
+          museum.displayCases.push({ row: 12, col: 14, artifact: null });
 
           // Give one of each artifact for testing
           addItemToInventory('Rusty Nails', rustyNailsSprite);
@@ -1772,6 +2047,14 @@
 
         // Function to start a new day
         function startNewDay() {
+          // IMPORTANT: Set game state FIRST to prevent museum update loop from running
+          gameState = 'playing';
+
+          // Reset museum state to ensure clean transition
+          museum.doorPrompt = false;
+          museum.wasNearDoor = false;
+          museum.buildMode = false;
+
           // Move to next day
           dayTime.currentDay++;
 
@@ -1797,7 +2080,7 @@
             oldGuy.dialogueStage = 0;
           }
 
-          // Reset player to starting position
+          // Reset player to starting position (overworld coordinates)
           player.x = world.width / 2;
           player.y = world.height - 40;
           player.vx = 0;
@@ -1806,12 +2089,13 @@
           // Reset camera to player
           camera.x = player.x;
           camera.y = player.y;
+          camera.x = Math.round(camera.x);
+          camera.y = Math.round(camera.y);
 
-          // Regenerate tiles (randomize X's)
+          // Regenerate tiles (randomize X's) and ensure sprites are loaded
           tileMap = generateTiles();
-
-          // Reset game state
-          gameState = 'playing';
+          tileRegenerationScheduled = false; // Reset flag to allow regeneration
+          regenerateTiles(); // Regenerate tiles to ensure sprites are properly loaded
         }
 
         function update(dtMs) {
@@ -1849,7 +2133,6 @@
             if (
               dayTime.currentHour >= dayTime.dayEndHour &&
               !brushingMinigame.active &&
-              !declarationMinigame.active &&
               !minesweeperMinigame.active &&
               !typoMinigame.active
             ) {
@@ -1933,6 +2216,9 @@
               player.y += player.vy;
             }
 
+            // Display case collision (treat each case like a solid block)
+            resolveDisplayCaseCollisions();
+
             // Museum wall collision (keep player inside museum bounds)
             const playerRadius = player.width / 2;
             const wallThickness = museumTileSize;
@@ -2003,6 +2289,9 @@
             // Resolve curator collision (separate function, like other NPCs)
             resolveCuratorCollision();
 
+            // Resolve cannonBuff collision (separate function, like other NPCs)
+            resolveCannonBuffCollision();
+
             // Update walking animation
             const isMoving = Math.hypot(player.vx, player.vy) > 0.1;
             if (isMoving) {
@@ -2027,11 +2316,12 @@
             !oldGuy.dialogue &&
             !joseph.dialogue &&
             !curator.dialogue &&
+            !cannonBuff.dialogue &&
             !tutorial.active &&
             !crouchAnimation.active &&
             !brushingMinigame.active &&
-            !declarationMinigame.active &&
             !minesweeperMinigame.active &&
+            !typoMinigame.active &&
             !gameOver.active
           ) {
             const wantsSprint = pressed('ShiftLeft') || pressed('ShiftRight');
@@ -2216,7 +2506,6 @@
           }
 
           updateBrushingMinigame(dtMs);
-          updateDeclarationMinigame(dtMs);
           updateMinesweeperMinigame(dtMs);
           updateTypoMinigame(dtMs);
           updateRadar(dtMs);
@@ -2413,6 +2702,76 @@
           }
         }
 
+        function resolveCannonBuffCollision() {
+          const playerRadius = player.radius; // Use cached radius
+          const dx = player.x - cannonBuff.x;
+          const dy = player.y - cannonBuff.y;
+          const distSq = dx * dx + dy * dy;
+          const minDist = cannonBuff.radius + playerRadius;
+          const minDistSq = minDist * minDist;
+
+          if (distSq < minDistSq && distSq > 0) {
+            const dist = Math.sqrt(distSq);
+            const overlap = minDist - dist;
+            const invDist = 1 / dist; // Cache inverse distance
+            player.x += dx * invDist * overlap;
+            player.y += dy * invDist * overlap;
+          }
+        }
+
+        // Display case collision (AABB vs circle)
+        // Keeps the player from walking through museum display cases
+        function resolveDisplayCaseCollisions() {
+          const playerRadius = player.radius;
+          const caseSize = tileSize;
+
+          for (let i = 0; i < museum.displayCases.length; i++) {
+            const displayCase = museum.displayCases[i];
+            const caseX = displayCase.col * caseSize;
+            const caseY = displayCase.row * caseSize;
+
+            // Find the closest point on the case rectangle to the player center
+            const closestX = clamp(player.x, caseX, caseX + caseSize);
+            const closestY = clamp(player.y, caseY, caseY + caseSize);
+            const dx = player.x - closestX;
+            const dy = player.y - closestY;
+            const distSq = dx * dx + dy * dy;
+
+            // If the player circle overlaps the rectangle, push it out
+            if (distSq < playerRadius * playerRadius) {
+              if (distSq > 0) {
+                const dist = Math.sqrt(distSq);
+                const overlap = playerRadius - dist;
+                const invDist = 1 / dist;
+                player.x += dx * invDist * overlap;
+                player.y += dy * invDist * overlap;
+              } else {
+                // Player center is inside the case; push out on the nearest side
+                const leftDist = player.x - caseX;
+                const rightDist = caseX + caseSize - player.x;
+                const topDist = player.y - caseY;
+                const bottomDist = caseY + caseSize - player.y;
+                const minDist = Math.min(
+                  leftDist,
+                  rightDist,
+                  topDist,
+                  bottomDist
+                );
+
+                if (minDist === leftDist) {
+                  player.x = caseX - playerRadius;
+                } else if (minDist === rightDist) {
+                  player.x = caseX + caseSize + playerRadius;
+                } else if (minDist === topDist) {
+                  player.y = caseY - playerRadius;
+                } else {
+                  player.y = caseY + caseSize + playerRadius;
+                }
+              }
+            }
+          }
+        }
+
         function advanceJosephDialogue() {
           // Progress through Joseph's dialogue sequence
           // If already completed dialogue (stage 10), just close
@@ -2518,7 +2877,7 @@
           }
 
           // Don't start new dialogue if one is already showing
-          if (oldGuy.dialogue || joseph.dialogue || curator.dialogue) {
+          if (oldGuy.dialogue || joseph.dialogue || curator.dialogue || cannonBuff.dialogue) {
             return;
           }
 
@@ -2632,8 +2991,10 @@
                 // Only store minigame if on red X or secret X tile, otherwise just play animation
                 if (tile.name === 'redX' || tile.name === 'secretX') {
                   // Store which minigame to start after animation
-                  // Testing: 100% typo minigame
-                  crouchAnimation.pendingMinigame = 'typo';
+                  // Randomly select one of four minigames with equal probability (25% each)
+                  const minigames = ['brushing', 'declaration', 'minesweeper', 'typo'];
+                  const randomIndex = Math.floor(Math.random() * minigames.length);
+                  crouchAnimation.pendingMinigame = minigames[randomIndex];
                   // Store whether this is a secret X tile for later reward multiplier
                   crouchAnimation.isSecretX = tile.name === 'secretX';
                 } else {
@@ -2652,25 +3013,57 @@
 
         // Helper function to add items to inventory when minigames complete
         // This function finds the first empty slot and adds the item there
+        // Artifacts have tiers that affect their inventory outline color
+        const ARTIFACT_NAMES = [
+          'Rusty Nails',
+          'Bullets',
+          'Grapeshot',
+          'Ornate pin',
+          'Canteen',
+        ];
+        const artifactTiers = {
+          'Rusty Nails': 'common',
+          Bullets: 'common',
+          Grapeshot: 'uncommon',
+          'Ornate pin': 'rare',
+          Canteen: 'rare',
+        };
+        const rarityRank = {
+          common: 0,
+          uncommon: 1,
+          rare: 2,
+          'super rare': 3,
+          legendary: 4,
+        };
+
+        function getArtifactTier(itemName) {
+          return artifactTiers[itemName] || 'common';
+        }
+
+        // Check if a tier is above another tier (strictly higher)
+        function isTierAbove(tier, minimumTier) {
+          const tierValue =
+            rarityRank[tier] !== undefined ? rarityRank[tier] : -1;
+          const minValue =
+            rarityRank[minimumTier] !== undefined
+              ? rarityRank[minimumTier]
+              : -1;
+          return tierValue > minValue;
+        }
+
         function addItemToInventory(itemName, sprite) {
-          // List of artifact names (all items added via this function are artifacts)
-          const artifactNames = [
-            'Rusty Nails',
-            'Bullets',
-            'Grapeshot',
-            'Ornate pin',
-            'Canteen',
-          ];
-          const isArtifact = artifactNames.includes(itemName);
+          const isArtifact = ARTIFACT_NAMES.includes(itemName);
 
           // Find first empty inventory slot
           for (let i = 0; i < inventory.slots.length; i++) {
             if (inventory.slots[i] === null) {
               // Empty slot found, add the item
+              const tier = isArtifact ? getArtifactTier(itemName) : null;
               inventory.slots[i] = {
                 name: itemName,
                 sprite: sprite,
                 type: isArtifact ? 'artifact' : 'item', // Mark artifacts for build mode
+                tier: tier, // common, uncommon, rare (artifacts only)
               };
               // Check if this is an artifact and quest is active
               if (
@@ -2759,39 +3152,6 @@
             brushingMinigame.brushY = canvas.height / 2 - 40; // Slightly above center
             brushingMinigame.brushOffset = 0;
             brushingMinigame.brushDirection = 1;
-          } else if (crouchAnimation.pendingMinigame === 'declaration') {
-            // Start Declaration of Independence minigame
-            declarationMinigame.active = true;
-            declarationMinigame.tileRow = row;
-            declarationMinigame.tileCol = col;
-            declarationMinigame.isSecretX = crouchAnimation.isSecretX;
-            declarationMinigame.answered = false;
-
-            // 50% chance the test excerpt is fake (has typos)
-            declarationMinigame.isFake = Math.random() < 0.5;
-
-            if (declarationMinigame.isFake) {
-              // Create fake version with random typo
-              // Available typos: "sertain", "Celf-Evident", "Craeted", "Unaliable", "Persuit"
-              const typoOptions = [
-                { from: 'certain', to: 'sertain' },
-                { from: 'self-evident', to: 'Celf-Evident' },
-                { from: 'created', to: 'Craeted' },
-                { from: 'unalienable', to: 'Unaliable' },
-                { from: 'pursuit', to: 'Persuit' },
-              ];
-              // Randomly pick one typo
-              const selectedTypo =
-                typoOptions[Math.floor(Math.random() * typoOptions.length)];
-              declarationMinigame.testExcerpt =
-                declarationMinigame.realExcerpt.replace(
-                  selectedTypo.from,
-                  selectedTypo.to
-                );
-            } else {
-              // Real version (no typos)
-              declarationMinigame.testExcerpt = declarationMinigame.realExcerpt;
-            }
           } else if (crouchAnimation.pendingMinigame === 'minesweeper') {
             // Start Minesweeper minigame
             minesweeperMinigame.active = true;
@@ -2822,26 +3182,26 @@
 
             // Mines will be placed after first click to ensure first click is safe
           } else if (crouchAnimation.pendingMinigame === 'typo') {
-            // Start Typo minigame (Thomas Paine's Common Sense)
+            // Start Typo minigame - randomly select a document
             typoMinigame.active = true;
             typoMinigame.tileRow = row;
             typoMinigame.tileCol = col;
             typoMinigame.isSecretX = crouchAnimation.isSecretX;
             typoMinigame.answered = false;
 
+            // Randomly select a document
+            const selectedDocument =
+              typoDocuments[
+                Math.floor(Math.random() * typoDocuments.length)
+              ];
+            typoMinigame.realExcerpt = selectedDocument.realExcerpt;
+
             // 50% chance the test excerpt is fake (has typos)
             typoMinigame.isFake = Math.random() < 0.5;
 
             if (typoMinigame.isFake) {
-              // Create fake version with random typo
-              // Available typos: "confused", "goverment", "distiction", "want", "possitvely"
-              const typoOptions = [
-                { from: 'confounded', to: 'confused' },
-                { from: 'government', to: 'goverment' },
-                { from: 'distinction', to: 'distiction' },
-                { from: 'wants', to: 'want' },
-                { from: 'possitively', to: 'possitvely' },
-              ];
+              // Create fake version with random typo from the selected document
+              const typoOptions = selectedDocument.typoOptions;
               // Randomly pick one typo
               const selectedTypo =
                 typoOptions[Math.floor(Math.random() * typoOptions.length)];
@@ -2849,6 +3209,8 @@
                 selectedTypo.from,
                 selectedTypo.to
               );
+              // Store the typo info for highlighting when wrong
+              typoMinigame.selectedTypo = selectedTypo;
             } else {
               // Real version (no typos)
               typoMinigame.testExcerpt = typoMinigame.realExcerpt;
@@ -3053,92 +3415,6 @@
           }
         }
 
-        // Handle player's answer in Declaration minigame
-        function handleDeclarationAnswer(playerSaidReal) {
-          if (declarationMinigame.answered) return; // Already answered
-
-          declarationMinigame.answered = true;
-
-          // Check if player was correct
-          // Player said Real (true) and it's actually Real (not fake) = correct
-          // Player said Fake (false) and it's actually Fake (isFake = true) = correct
-          // Special case: If player calls a real document fake, no penalty (neutral)
-          const isCorrect =
-            (playerSaidReal && !declarationMinigame.isFake) ||
-            (!playerSaidReal && declarationMinigame.isFake);
-
-          // Check if player called a real document fake (neutral outcome)
-          const calledRealFake = !playerSaidReal && !declarationMinigame.isFake;
-
-          declarationMinigame.wasCorrect = isCorrect;
-
-          let actualReward = 0;
-          if (isCorrect) {
-            let multiplier = 1.0;
-            if (inventory.equipment) {
-              if (inventory.equipment.tier === 1)
-                multiplier = 1.5; // Simple shovel
-              else if (inventory.equipment.tier === 2)
-                multiplier = 2.0; // Iron shovel
-              else if (inventory.equipment.tier === 3)
-                multiplier = 2.5; // Steel shovel
-              else if (inventory.equipment.tier === 4)
-                multiplier = 3.0; // Diamond shovel
-              else if (inventory.equipment.tier === 5) multiplier = 4.0; // Legendary shovel
-            }
-            // Apply 1.5x multiplier for secret X tiles
-            if (declarationMinigame.isSecretX) {
-              multiplier *= 1.5;
-            }
-            actualReward = Math.round(
-              declarationMinigame.baseReward * multiplier
-            );
-          } else if (calledRealFake) {
-            actualReward = 0;
-          } else {
-            actualReward = 0;
-          }
-
-          declarationMinigame.actualReward = actualReward;
-
-          // Give minigame reward (bullets or grapeshot) when answered correctly
-          if (isCorrect) {
-            giveMinigameReward();
-          }
-
-          // Convert tile to grass
-          const grassDef = tileDefinitions.find((def) => def.name === 'grass');
-          if (
-            grassDef &&
-            declarationMinigame.tileRow !== null &&
-            declarationMinigame.tileCol !== null
-          ) {
-            tileMap[declarationMinigame.tileRow][declarationMinigame.tileCol] =
-              {
-                name: grassDef.name,
-                canvas: createTileCanvas(grassDef.draw),
-              };
-            // Remove from discovered secret X list if it was a secret X tile
-            radar.discoveredSecretX = radar.discoveredSecretX.filter(
-              (pos) =>
-                !(
-                  pos.row === declarationMinigame.tileRow &&
-                  pos.col === declarationMinigame.tileCol
-                )
-            );
-          }
-
-          // Close minigame after a short delay to show result
-          setTimeout(() => {
-            declarationMinigame.active = false;
-          }, 1000); // 1 second delay to show result
-        }
-
-        function updateDeclarationMinigame(dtMs) {
-          if (!declarationMinigame.active) return;
-          // Minigame logic is handled by key presses, no continuous updates needed
-        }
-
         function handleTypoAnswer(playerSaidReal) {
           if (typoMinigame.answered) return; // Already answered
 
@@ -3338,8 +3614,23 @@
           if (minesweeper.gameOver || minesweeper.won) return;
 
           if (isRightClick) {
-            // Right click = toggle flag
+            // Right click = toggle flag (limit to 4 flags total)
             if (!minesweeper.revealed[row][col]) {
+              const currentlyFlagged = minesweeper.flagged[row][col];
+              
+              // Count current flags
+              let flagCount = 0;
+              for (let r = 0; r < minesweeper.gridSize; r++) {
+                for (let c = 0; c < minesweeper.gridSize; c++) {
+                  if (minesweeper.flagged[r][c]) flagCount++;
+                }
+              }
+              
+              // Only allow flagging if we have less than 4 flags, or if we're unflagging
+              if (!currentlyFlagged && flagCount >= 4) {
+                return; // Can't place more flags
+              }
+              
               minesweeper.flagged[row][col] = !minesweeper.flagged[row][col];
             }
           } else {
@@ -3590,6 +3881,7 @@
           oldGuySprite,
           shopkeeperSprite,
           curatorSprite,
+          cannonBuffSprite,
           // vendingMachineSprite, // Removed - NPC not in use
           chocolateBarSprite,
           bulletsSprite,
@@ -4066,6 +4358,59 @@
             }
           }
 
+          // Draw cannon display sprites in the center tiles (one flipped)
+          // Position slightly above center (move up 2 rows)
+          const cannonRow = Math.floor(museum.height / 2) - 2;
+          const leftCannonCol = Math.floor(museum.width / 2) - 1;
+          const rightCannonCol = leftCannonCol + 1;
+          const cannonSize = Math.floor(museumTileSize * 1.5); // Make cannons 1.5x tile size
+          const cannonOffsetX = (cannonSize - museumTileSize) / 2; // Center within tile
+          const cannonOffsetY = (cannonSize - museumTileSize) / 2;
+          const leftCannonX = leftCannonCol * museumTileSize - cannonOffsetX;
+          const rightCannonX = rightCannonCol * museumTileSize - cannonOffsetX;
+          const cannonY = cannonRow * museumTileSize - cannonOffsetY;
+
+          if (
+            cannonDisplaySprite.complete &&
+            cannonDisplaySprite.naturalWidth > 0
+          ) {
+            ctx.drawImage(
+              cannonDisplaySprite,
+              leftCannonX,
+              cannonY,
+              cannonSize,
+              cannonSize
+            );
+
+            // Flip the right cannon horizontally inside its tile
+            ctx.save();
+            ctx.translate(rightCannonX + cannonSize, cannonY);
+            ctx.scale(-1, 1);
+            ctx.drawImage(
+              cannonDisplaySprite,
+              0,
+              0,
+              cannonSize,
+              cannonSize
+            );
+            ctx.restore();
+          } else {
+            // Fallback rectangles if the sprite isn't ready yet
+            ctx.fillStyle = '#5a5a5a';
+            ctx.fillRect(
+              leftCannonX,
+              cannonY,
+              cannonSize,
+              cannonSize
+            );
+            ctx.fillRect(
+              rightCannonX,
+              cannonY,
+              cannonSize,
+              cannonSize
+            );
+          }
+
           // Draw display cases and artifacts
           for (let i = 0; i < museum.displayCases.length; i++) {
             const displayCase = museum.displayCases[i];
@@ -4340,38 +4685,9 @@
               drawDialogueBox();
             }
 
-            // Draw build mode indicator
+            // Draw build mode inventory panel
             if (museum.buildMode) {
-              ctx.save();
-              ctx.fillStyle = 'rgba(255, 255, 0, 0.2)';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              ctx.fillStyle = '#ffff00';
-              ctx.font = 'bold 24px ui-monospace, Menlo, Consolas, monospace';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'top';
-              ctx.fillText(
-                'BUILD MODE - Click display cases to place artifacts',
-                canvas.width / 2,
-                20
-              );
-              ctx.restore();
-            }
-
-            // Draw build mode indicator
-            if (museum.buildMode) {
-              ctx.save();
-              ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              ctx.fillStyle = '#ffff00';
-              ctx.font = 'bold 24px ui-monospace, Menlo, Consolas, monospace';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'top';
-              ctx.fillText(
-                'BUILD MODE - Click display cases to place artifacts',
-                canvas.width / 2,
-                20
-              );
-              ctx.restore();
+              drawBuildModeInventoryPanel();
             }
 
             return; // Don't render normal game elements in museum
@@ -4614,9 +4930,13 @@
             ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Minigame panel
-            const panelWidth = 450;
-            const panelHeight = 350;
+            // Minigame panel - fit around content (dirt + brush movement) then scale up
+            const dirtSize = 200; // Increased from 150
+            const brushSize = 100; // Increased from 80
+            const maxOffset = 80; // Brush movement range (increased from 60)
+            const padding = 60; // Padding around content
+            const panelWidth = dirtSize + maxOffset * 2 + padding * 2; // Fit content width
+            const panelHeight = dirtSize + brushSize / 2 + padding * 2; // Fit content height
             const panelX = (canvas.width - panelWidth) / 2;
             const panelY = (canvas.height - panelHeight) / 2;
 
@@ -4628,7 +4948,7 @@
             ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
 
             // Draw dirt sprite (in center, with red tint based on redness)
-            const dirtSize = 150;
+            // Note: dirtSize is now calculated above in panel dimensions
             const dirtX = canvas.width / 2;
             const dirtY = canvas.height / 2;
 
@@ -4714,7 +5034,7 @@
                 break;
               }
             }
-            const brushSize = 80;
+            // Note: brushSize is already declared above in panel dimensions
             const brushX = canvas.width / 2 + brushingMinigame.brushOffset; // Add offset for animation
             const brushY = brushingMinigame.brushY;
 
@@ -4760,26 +5080,7 @@
               ctx.restore();
             }
 
-            // Instructions
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '14px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.fillText(
-              'Hold SPACE to brush the dirt clean!',
-              canvas.width / 2,
-              panelY + 20
-            );
-
-            ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(
-              'When it turns RED, release SPACE quickly for max cash!',
-              canvas.width / 2,
-              panelY + panelHeight - 20
-            );
-
-            // Question mark in bottom left of screen (for future use)
+            // Question mark in bottom left of screen - clickable to show instructions
             // Check if mouse is hovering over the question mark
             const questionMarkSize = 20; // Approximate size of the question mark
             const questionMarkX = 15;
@@ -4797,11 +5098,55 @@
             ctx.textBaseline = 'bottom';
             ctx.fillText('?', questionMarkX, questionMarkY);
 
+            // Draw instructions if question mark was clicked
+            if (brushingMinigame.showInstructions) {
+              // Instructions panel
+              const instructionsPanelWidth = 400;
+              const instructionsPanelHeight = 200;
+              const instructionsPanelX = (canvas.width - instructionsPanelWidth) / 2;
+              const instructionsPanelY = (canvas.height - instructionsPanelHeight) / 2;
+
+              // Background
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+              ctx.fillRect(instructionsPanelX, instructionsPanelY, instructionsPanelWidth, instructionsPanelHeight);
+
+              // Border
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 2;
+              ctx.strokeRect(instructionsPanelX, instructionsPanelY, instructionsPanelWidth, instructionsPanelHeight);
+
+              // Instructions text
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 18px ui-monospace, Menlo, Consolas, monospace';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'top';
+              
+              const instructions = [
+                'Brushing Instructions',
+                '',
+                'Hold SPACE to brush the dirt clean',
+                'Wait for it to turn RED',
+                'Release SPACE quickly when red',
+                'Time it perfect to earn an Artifact!'
+              ];
+
+              let textY = instructionsPanelY + 20;
+              for (let i = 0; i < instructions.length; i++) {
+                ctx.font = i === 0 ? 'bold 18px ui-monospace, Menlo, Consolas, monospace' : '14px ui-monospace, Menlo, Consolas, monospace';
+                ctx.fillText(
+                  instructions[i],
+                  canvas.width / 2,
+                  textY
+                );
+                textY += i === 0 ? 30 : 25; // Extra spacing after title
+              }
+            }
+
             ctx.restore();
           }
 
-          // Draw Declaration of Independence minigame
-          if (declarationMinigame.active) {
+          // Draw Typo minigame (handles all text-based minigames: Declaration, Common Sense, Confederacy)
+          if (typoMinigame.active) {
             ctx.save();
 
             // Background overlay
@@ -4827,7 +5172,7 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
             ctx.fillText(
-              'Declaration of Independence - Authenticity Check',
+              'Document Authenticity Check',
               Math.round(canvas.width / 2),
               Math.round(panelY + 20)
             );
@@ -4859,248 +5204,6 @@
             // Enable better text rendering
 
             // Word wrap for left text
-            const leftWords = declarationMinigame.realExcerpt.split(' ');
-            let leftLine = '';
-            let leftY = textY;
-            for (let i = 0; i < leftWords.length; i++) {
-              const testLine = leftLine + leftWords[i] + ' ';
-              const metrics = ctx.measureText(testLine);
-              if (metrics.width > textWidth && i > 0) {
-                ctx.fillText(leftLine, Math.round(leftX), Math.round(leftY));
-                leftLine = leftWords[i] + ' ';
-                leftY += 24;
-              } else {
-                leftLine = testLine;
-              }
-            }
-            ctx.fillText(leftLine, Math.round(leftX), Math.round(leftY));
-
-            // Divider line
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(panelX + panelWidth / 2, panelY + 60);
-            ctx.lineTo(panelX + panelWidth / 2, panelY + panelHeight - 100);
-            ctx.stroke();
-
-            // Right column label (Questionable)
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 24px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(
-              'Possible fake',
-              Math.round(rightX + columnWidth / 2),
-              Math.round(textY - 25)
-            );
-
-            // Right column text (test excerpt)
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '18px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            // Enable better text rendering
-
-            // Word wrap for right text
-            const rightWords = declarationMinigame.testExcerpt.split(' ');
-            let rightLine = '';
-            let rightY = textY;
-            for (let i = 0; i < rightWords.length; i++) {
-              const testLine = rightLine + rightWords[i] + ' ';
-              const metrics = ctx.measureText(testLine);
-              if (metrics.width > textWidth && i > 0) {
-                ctx.fillText(rightLine, Math.round(rightX), Math.round(rightY));
-                rightLine = rightWords[i] + ' ';
-                rightY += 24;
-              } else {
-                rightLine = testLine;
-              }
-            }
-            ctx.fillText(rightLine, Math.round(rightX), Math.round(rightY));
-
-            // Buttons
-            if (!declarationMinigame.answered) {
-              const buttonY = panelY + panelHeight - 80;
-              const buttonWidth = 150;
-              const buttonHeight = 40;
-              const buttonSpacing = 20;
-              const totalButtonWidth = buttonWidth * 2 + buttonSpacing;
-              const buttonStartX = canvas.width / 2 - totalButtonWidth / 2;
-
-              // Display button (left) - brighter green
-              const displayButtonX = buttonStartX;
-              // Check if mouse is hovering over Display button
-              const isHoveringDisplay =
-                mouseX >= displayButtonX &&
-                mouseX <= displayButtonX + buttonWidth &&
-                mouseY >= buttonY &&
-                mouseY <= buttonY + buttonHeight;
-
-              // Use brighter color when hovering
-              ctx.fillStyle = isHoveringDisplay
-                ? 'rgba(0, 255, 0, 1.0)' // Even brighter green on hover
-                : 'rgba(0, 200, 0, 0.9)'; // Brighter green
-              ctx.fillRect(
-                Math.round(displayButtonX),
-                Math.round(buttonY),
-                buttonWidth,
-                buttonHeight
-              );
-              ctx.strokeStyle = '#ffffff'; // White border (no yellow on hover)
-              ctx.lineWidth = 2;
-              ctx.strokeRect(
-                Math.round(displayButtonX),
-                Math.round(buttonY),
-                buttonWidth,
-                buttonHeight
-              );
-              ctx.fillStyle = '#ffffff';
-              ctx.font = 'bold 18px ui-monospace, Menlo, Consolas, monospace';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText(
-                'Display',
-                Math.round(displayButtonX + buttonWidth / 2),
-                Math.round(buttonY + buttonHeight / 2)
-              );
-
-              // Throw away button (right) - brighter red
-              const throwAwayButtonX =
-                buttonStartX + buttonWidth + buttonSpacing;
-              // Check if mouse is hovering over Throw away button
-              const isHoveringThrowAway =
-                mouseX >= throwAwayButtonX &&
-                mouseX <= throwAwayButtonX + buttonWidth &&
-                mouseY >= buttonY &&
-                mouseY <= buttonY + buttonHeight;
-
-              // Use brighter color when hovering
-              ctx.fillStyle = isHoveringThrowAway
-                ? 'rgba(255, 0, 0, 1.0)' // Even brighter red on hover
-                : 'rgba(200, 0, 0, 0.9)'; // Brighter red
-              ctx.fillRect(
-                Math.round(throwAwayButtonX),
-                Math.round(buttonY),
-                buttonWidth,
-                buttonHeight
-              );
-              ctx.strokeStyle = '#ffffff'; // White border (no yellow on hover)
-              ctx.lineWidth = 2;
-              ctx.strokeRect(
-                Math.round(throwAwayButtonX),
-                Math.round(buttonY),
-                buttonWidth,
-                buttonHeight
-              );
-              ctx.fillStyle = '#ffffff';
-              ctx.font = 'bold 18px ui-monospace, Menlo, Consolas, monospace';
-              ctx.textAlign = 'center';
-              ctx.textBaseline = 'middle';
-              ctx.fillText(
-                'Throw away',
-                Math.round(throwAwayButtonX + buttonWidth / 2),
-                Math.round(buttonY + buttonHeight / 2)
-              );
-            } else {
-              let resultText = '';
-              let resultColor = '#ffffff';
-
-              if (declarationMinigame.wasCorrect) {
-                resultText = 'Correct!';
-                resultColor = '#00ff00';
-              } else if (declarationMinigame.actualReward === 0) {
-                resultText = 'Incorrect! (No penalty)';
-                resultColor = '#ffff00';
-              } else {
-                resultText = 'Incorrect!';
-                resultColor = '#ff0000';
-              }
-
-              ctx.fillStyle = resultColor;
-              ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
-              ctx.fillText(
-                resultText,
-                Math.round(canvas.width / 2),
-                Math.round(panelY + panelHeight - 60)
-              );
-            }
-
-            // Question mark in bottom left of screen (for future use)
-            // Check if mouse is hovering over the question mark
-            const questionMarkSize = 20; // Approximate size of the question mark
-            const questionMarkX = 15;
-            const questionMarkY = canvas.height - 15;
-            const isHoveringQuestionMark =
-              mouseX >= questionMarkX - 5 &&
-              mouseX <= questionMarkX + questionMarkSize + 5 &&
-              mouseY >= questionMarkY - questionMarkSize - 5 &&
-              mouseY <= questionMarkY + 5;
-
-            // Change color when hovering (like a button)
-            ctx.fillStyle = isHoveringQuestionMark ? '#ffffff' : '#888888';
-            ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText('?', questionMarkX, questionMarkY);
-
-            ctx.restore();
-          }
-
-          // Draw Typo minigame (Thomas Paine's Common Sense)
-          if (typoMinigame.active) {
-            ctx.save();
-
-            // Background overlay
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Minigame panel
-            const panelWidth = 700;
-            const panelHeight = 500;
-            const panelX = (canvas.width - panelWidth) / 2;
-            const panelY = (canvas.height - panelHeight) / 2;
-
-            ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
-            ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-
-            ctx.strokeStyle = '#ffffff'; // White menu borders
-            ctx.lineWidth = 3;
-            ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
-
-            // Title
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 24px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.fillText(
-              "Thomas Paine's Common Sense",
-              Math.round(canvas.width / 2),
-              Math.round(panelY + 20)
-            );
-
-            // Divide panel into two columns
-            const columnWidth = (panelWidth - 60) / 2; // Leave space for divider and padding
-            const leftX = panelX + 20;
-            const rightX = panelX + panelWidth / 2 + 10;
-            const textY = panelY + 70;
-            const textWidth = columnWidth - 20;
-
-            // Left column label (Reference)
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(
-              'Reference',
-              Math.round(leftX + columnWidth / 2),
-              Math.round(textY - 25)
-            );
-
-            // Left column text (real excerpt) - Reduced text size
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '14px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-
-            // Word wrap for left text
             const leftWords = typoMinigame.realExcerpt.split(' ');
             let leftLine = '';
             let leftY = textY;
@@ -5110,7 +5213,7 @@
               if (metrics.width > textWidth && i > 0) {
                 ctx.fillText(leftLine, Math.round(leftX), Math.round(leftY));
                 leftLine = leftWords[i] + ' ';
-                leftY += 18; // Reduced line height
+                leftY += 22;
               } else {
                 leftLine = testLine;
               }
@@ -5135,28 +5238,65 @@
               Math.round(textY - 25)
             );
 
-            // Right column text (test excerpt) - Reduced text size
+            // Right column text (test excerpt)
             ctx.fillStyle = '#ffffff';
-            ctx.font = '14px ui-monospace, Menlo, Consolas, monospace';
+            ctx.font = '16px ui-monospace, Menlo, Consolas, monospace';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'top';
+            // Enable better text rendering
 
-            // Word wrap for right text
+            // Word wrap for right text with typo highlighting
             const rightWords = typoMinigame.testExcerpt.split(' ');
             let rightLine = '';
             let rightY = textY;
+            // Check if we should highlight the typo (answered wrong and is fake)
+            const shouldHighlightTypo =
+              typoMinigame.answered &&
+              !typoMinigame.wasCorrect &&
+              typoMinigame.isFake &&
+              typoMinigame.selectedTypo;
+            const typoWord = shouldHighlightTypo
+              ? typoMinigame.selectedTypo.to
+              : null;
+
             for (let i = 0; i < rightWords.length; i++) {
               const testLine = rightLine + rightWords[i] + ' ';
               const metrics = ctx.measureText(testLine);
               if (metrics.width > textWidth && i > 0) {
-                ctx.fillText(rightLine, Math.round(rightX), Math.round(rightY));
+                // Draw the current line word by word to highlight typos
+                const lineWords = rightLine.trim().split(' ');
+                let xPos = rightX;
+                for (let j = 0; j < lineWords.length; j++) {
+                  const lineWord = lineWords[j].replace(/[.,;:]/g, '');
+                  const wordText = lineWords[j] + (j < lineWords.length - 1 ? ' ' : '');
+                  if (shouldHighlightTypo && lineWord === typoWord) {
+                    ctx.fillStyle = '#ff0000'; // Red for typo
+                  } else {
+                    ctx.fillStyle = '#ffffff';
+                  }
+                  ctx.fillText(wordText, Math.round(xPos), Math.round(rightY));
+                  xPos += ctx.measureText(wordText).width;
+                }
                 rightLine = rightWords[i] + ' ';
-                rightY += 18; // Reduced line height
+                rightY += 22;
               } else {
                 rightLine = testLine;
               }
             }
-            ctx.fillText(rightLine, Math.round(rightX), Math.round(rightY));
+            // Draw the last line word by word to highlight typos
+            const lineWords = rightLine.trim().split(' ');
+            let xPos = rightX;
+            for (let j = 0; j < lineWords.length; j++) {
+              const lineWord = lineWords[j].replace(/[.,;:]/g, '');
+              const wordText = lineWords[j] + (j < lineWords.length - 1 ? ' ' : '');
+              if (shouldHighlightTypo && lineWord === typoWord) {
+                ctx.fillStyle = '#ff0000'; // Red for typo
+              } else {
+                ctx.fillStyle = '#ffffff';
+              }
+              ctx.fillText(wordText, Math.round(xPos), Math.round(rightY));
+              xPos += ctx.measureText(wordText).width;
+            }
 
             // Buttons
             if (!typoMinigame.answered) {
@@ -5258,6 +5398,8 @@
 
               ctx.fillStyle = resultColor;
               ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
+              ctx.textAlign = 'center'; // Ensure text is centered
+              ctx.textBaseline = 'middle'; // Center vertically too
               ctx.fillText(
                 resultText,
                 Math.round(canvas.width / 2),
@@ -5357,11 +5499,13 @@
             ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Minigame panel
+            // Minigame panel - square (no text, so same width and height)
             const gridSize = minesweeperMinigame.gridSize;
-            const cellSize = 40; // Size of each cell
-            const panelWidth = gridSize * cellSize + 80; // Increased padding
-            const panelHeight = gridSize * cellSize + 140; // Increased padding
+            const cellSize = 50; // Size of each cell (increased from 40)
+            const panelPadding = 40; // Padding around grid
+            const gridAreaSize = gridSize * cellSize;
+            const panelWidth = gridAreaSize + panelPadding * 2; // Square panel
+            const panelHeight = panelWidth; // Make it square (same as width)
             const panelX = (canvas.width - panelWidth) / 2;
             const panelY = (canvas.height - panelHeight) / 2;
 
@@ -5372,18 +5516,11 @@
             ctx.lineWidth = 3;
             ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
 
-            // Title
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.fillText('Minesweeper', canvas.width / 2, panelY + 15);
-
-            // Draw grid (centered in panel)
+            // Draw grid (centered in square panel - no title text)
             const gridWidth = gridSize * cellSize;
             const gridHeight = gridSize * cellSize;
-            const gridStartX = panelX + (panelWidth - gridWidth) / 2;
-            const gridStartY = panelY + 50; // Keep title space at top
+            const gridStartX = panelX + panelPadding;
+            const gridStartY = panelY + panelPadding;
 
             for (let row = 0; row < gridSize; row++) {
               for (let col = 0; col < gridSize; col++) {
@@ -5503,34 +5640,20 @@
               }
             }
 
-            // Draw status message
-            if (minesweeperMinigame.gameOver) {
-              ctx.fillStyle = '#ff0000';
-              ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
+            // Display "Good job!" in green when won
+            if (minesweeperMinigame.won) {
+              ctx.fillStyle = '#00ff00'; // Green color
+              ctx.font = 'bold 24px ui-monospace, Menlo, Consolas, monospace';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
               ctx.fillText(
-                'Game Over!',
+                'Good job!',
                 canvas.width / 2,
-                panelY + panelHeight - 30
-              );
-            } else if (minesweeperMinigame.won) {
-              ctx.fillStyle = '#00ff00';
-              ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
-              ctx.fillText(
-                'You Win!',
-                canvas.width / 2,
-                panelY + panelHeight - 30
-              );
-            } else {
-              ctx.fillStyle = '#ffffff';
-              ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
-              ctx.fillText(
-                'Left click to reveal, Right click to flag',
-                canvas.width / 2,
-                panelY + panelHeight - 30
+                panelY + 30
               );
             }
 
-            // Question mark in bottom left of screen (for future use)
+            // Question mark in bottom left of screen - clickable to show instructions
             // Check if mouse is hovering over the question mark
             const questionMarkSize = 20; // Approximate size of the question mark
             const questionMarkX = 15;
@@ -5548,6 +5671,50 @@
             ctx.textBaseline = 'bottom';
             ctx.fillText('?', questionMarkX, questionMarkY);
 
+            // Draw instructions if question mark was clicked
+            if (minesweeperMinigame.showInstructions) {
+              // Instructions panel
+              const instructionsPanelWidth = 400;
+              const instructionsPanelHeight = 200;
+              const instructionsPanelX = (canvas.width - instructionsPanelWidth) / 2;
+              const instructionsPanelY = (canvas.height - instructionsPanelHeight) / 2;
+
+              // Background
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+              ctx.fillRect(instructionsPanelX, instructionsPanelY, instructionsPanelWidth, instructionsPanelHeight);
+
+              // Border
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 2;
+              ctx.strokeRect(instructionsPanelX, instructionsPanelY, instructionsPanelWidth, instructionsPanelHeight);
+
+              // Instructions text
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 18px ui-monospace, Menlo, Consolas, monospace';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'top';
+              
+              const instructions = [
+                'Minesweeper Instructions',
+                '',
+                'Left click to reveal tiles',
+                'Right click to flag mines',
+                'Numbers show adjacent mines',
+                'Reveal all safe tiles to win!'
+              ];
+
+              let textY = instructionsPanelY + 20;
+              for (let i = 0; i < instructions.length; i++) {
+                ctx.font = i === 0 ? 'bold 18px ui-monospace, Menlo, Consolas, monospace' : '14px ui-monospace, Menlo, Consolas, monospace';
+                ctx.fillText(
+                  instructions[i],
+                  canvas.width / 2,
+                  textY
+                );
+                textY += i === 0 ? 30 : 25; // Extra spacing after title
+              }
+            }
+
             ctx.restore();
           }
 
@@ -5564,7 +5731,8 @@
             (tutorial.active && dayTime.currentDay === 0) ||
             oldGuy.dialogue ||
             joseph.dialogue ||
-            curator.dialogue
+            curator.dialogue ||
+            cannonBuff.dialogue
           ) {
             drawDialogueBox();
           }
@@ -5630,7 +5798,26 @@
               canvas.height / 2 - 100
             );
 
-            // Week end screen (money system removed)
+            // Week end screen (museum ending rank)
+            const endingRank = getMuseumEndingRank();
+
+            ctx.fillStyle = '#e8eaf6';
+            ctx.font = 'bold 26px ui-monospace, Menlo, Consolas, monospace';
+            ctx.fillText(
+              `Ending: ${endingRank.name}`,
+              canvas.width / 2,
+              canvas.height / 2 - 40
+            );
+
+            ctx.font = '16px ui-monospace, Menlo, Consolas, monospace';
+            const reasonLines = wrapTextLines(endingRank.reason, 500);
+            for (let i = 0; i < reasonLines.length; i++) {
+              ctx.fillText(
+                reasonLines[i],
+                canvas.width / 2,
+                canvas.height / 2 - 5 + i * 20
+              );
+            }
 
             ctx.fillStyle = '#e8eaf6';
             ctx.font = '18px ui-monospace, Menlo, Consolas, monospace';
@@ -6139,7 +6326,7 @@
             ? systemMessage.text
             : tutorial.active
             ? tutorial.dialogue
-            : oldGuy.dialogue || joseph.dialogue || curator.dialogue || '';
+            : oldGuy.dialogue || joseph.dialogue || curator.dialogue || cannonBuff.dialogue || '';
           const words = dialogueText.split(' ');
           let line = '';
           // Start text below character name and line (add extra space if name exists)
@@ -6389,12 +6576,10 @@
 
               // Slot background
               ctx.fillStyle = 'rgba(20, 40, 30, 0.8)';
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)'; // White borders
               ctx.lineWidth = 1.5;
               ctx.beginPath();
               ctx.rect(slotX, slotY, slotSize, slotSize);
               ctx.fill();
-              ctx.stroke();
 
               // Check if hovering over this slot
               const isHovered =
@@ -6435,13 +6620,26 @@
                   } else if (item.name === 'Speed Brush') {
                     description = 'Makes brushing minigame easier';
                   } else {
-                    description = item.name;
+                    // Add tier label for artifacts (ex: "Rusty Nails (common)")
+                    const tierLabel = item.tier ? ` (${item.tier})` : '';
+                    description = item.name + tierLabel;
                   }
                   if (!hoveredItemDescription) {
                     hoveredItemDescription = description;
                   }
                 }
               }
+
+              // Slot outline (tier colors for artifacts)
+              let outlineColor = 'rgba(255, 255, 255, 0.7)'; // Default white
+              if (item && item.type === 'artifact' && item.tier) {
+                if (item.tier === 'common') outlineColor = '#9b9b9b'; // Gray
+                else if (item.tier === 'uncommon')
+                  outlineColor = '#7dff8a'; // Light green
+                else if (item.tier === 'rare') outlineColor = '#7dc7ff'; // Light blue
+              }
+              ctx.strokeStyle = outlineColor;
+              ctx.stroke();
             }
           }
 
@@ -6502,6 +6700,304 @@
             panelX + inventoryWidth / 2,
             panelY + inventoryHeight - 12
           );
+
+          ctx.restore();
+        }
+
+        // Build mode inventory panel (shows artifact choices)
+        function getBuildModeInventoryLayout() {
+          const slotSize = 40;
+          const slotSpacing = 6;
+          const slotsPerRow = 5;
+          const panelPadding = 12;
+          const titleHeight = 36; // Room for wrapped instruction text
+
+          // Build a list of artifacts + their real inventory slot index
+          const artifacts = [];
+          for (let i = 0; i < inventory.slots.length; i++) {
+            const item = inventory.slots[i];
+            if (item && item.type === 'artifact') {
+              artifacts.push({ item: item, slotIndex: i });
+            }
+          }
+
+          const rows = Math.max(1, Math.ceil(artifacts.length / slotsPerRow));
+          const panelWidth =
+            slotsPerRow * slotSize +
+            (slotsPerRow - 1) * slotSpacing +
+            panelPadding * 2;
+          const panelHeight =
+            titleHeight +
+            rows * slotSize +
+            (rows - 1) * slotSpacing +
+            panelPadding * 2;
+
+          const panelX = Math.round(canvas.width / 2 - panelWidth / 2) + 0.5;
+          const panelY = Math.round(canvas.height - panelHeight - 20) + 0.5;
+          const slotsStartX = panelX + panelPadding;
+          const slotsStartY = panelY + panelPadding + titleHeight;
+
+          return {
+            artifacts,
+            rows,
+            slotSize,
+            slotSpacing,
+            slotsPerRow,
+            panelX,
+            panelY,
+            panelWidth,
+            panelHeight,
+            slotsStartX,
+            slotsStartY,
+          };
+        }
+
+        // Wrap text into multiple lines that fit within a max width
+        function wrapTextLines(text, maxWidth) {
+          const words = text.split(' ');
+          const lines = [];
+          let currentLine = '';
+
+          for (let i = 0; i < words.length; i++) {
+            const testLine = currentLine
+              ? currentLine + ' ' + words[i]
+              : words[i];
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth && currentLine) {
+              lines.push(currentLine);
+              currentLine = words[i];
+            } else {
+              currentLine = testLine;
+            }
+          }
+
+          if (currentLine) {
+            lines.push(currentLine);
+          }
+
+          return lines;
+        }
+
+        // Determine the week ending rank based on museum contents
+        function getMuseumEndingRank() {
+          const totalCases = museum.displayCases.length;
+          const filledCases = museum.displayCases.filter(
+            (displayCase) => displayCase.artifact
+          ).length;
+          const museumArtifacts = museum.displayCases
+            .filter((displayCase) => displayCase.artifact)
+            .map((displayCase) => displayCase.artifact);
+          const isFull = filledCases === totalCases;
+
+          const museumNames = new Set(
+            museumArtifacts.map((artifact) => artifact.name)
+          );
+          const hasAllItems = ARTIFACT_NAMES.every((name) =>
+            museumNames.has(name)
+          );
+
+          const allAboveCommon =
+            museumArtifacts.length > 0 &&
+            museumArtifacts.every((artifact) => {
+              const tier = artifact.tier || getArtifactTier(artifact.name);
+              return isTierAbove(tier, 'common');
+            });
+          const allAboveSuperRare =
+            museumArtifacts.length > 0 &&
+            museumArtifacts.every((artifact) => {
+              const tier = artifact.tier || getArtifactTier(artifact.name);
+              return isTierAbove(tier, 'super rare');
+            });
+
+          if (hasAllItems) {
+            return {
+              name: 'Collecter',
+              reason: 'You displayed at least one of every artifact.',
+            };
+          }
+          if (!isFull) {
+            return {
+              name: 'Average',
+              reason: 'You did not completely fill your museum.',
+            };
+          }
+          if (allAboveSuperRare) {
+            return {
+              name: 'Legendary',
+              reason: 'Every displayed artifact is above super rare.',
+            };
+          }
+          if (allAboveCommon) {
+            return {
+              name: 'Above Average',
+              reason: 'Every displayed artifact is above common.',
+            };
+          }
+          return {
+            name: 'Average',
+            reason: 'Some displayed artifacts are common.',
+          };
+        }
+
+        function drawBuildModeInventoryPanel() {
+          const layout = getBuildModeInventoryLayout();
+          const artifacts = layout.artifacts;
+
+          ctx.save();
+
+          // Panel background
+          ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
+          ctx.fillRect(
+            layout.panelX,
+            layout.panelY,
+            layout.panelWidth,
+            layout.panelHeight
+          );
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(
+            layout.panelX,
+            layout.panelY,
+            layout.panelWidth,
+            layout.panelHeight
+          );
+
+          // Title/instructions (wrapped to fit panel)
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'top';
+          const instructionText =
+            'Select a artifact, and then select a display case!';
+          const instructionMaxWidth = layout.panelWidth - 16;
+          const instructionLines = wrapTextLines(
+            instructionText,
+            instructionMaxWidth
+          );
+          for (let i = 0; i < instructionLines.length; i++) {
+            ctx.fillText(
+              instructionLines[i],
+              layout.panelX + layout.panelWidth / 2,
+              layout.panelY + 4 + i * 16
+            );
+          }
+
+          // If no artifacts, show a hint
+          if (artifacts.length === 0) {
+            ctx.fillStyle = '#cccccc';
+            ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
+            ctx.fillText(
+              'You have no artifacts',
+              layout.panelX + layout.panelWidth / 2,
+              layout.panelY + layout.panelHeight / 2
+            );
+            ctx.restore();
+            return;
+          }
+
+          let hoveredItemDescription = null;
+
+          // Draw artifact slots
+          for (let i = 0; i < artifacts.length; i++) {
+            const row = Math.floor(i / layout.slotsPerRow);
+            const col = i % layout.slotsPerRow;
+            const slotX =
+              layout.slotsStartX + col * (layout.slotSize + layout.slotSpacing);
+            const slotY =
+              layout.slotsStartY + row * (layout.slotSize + layout.slotSpacing);
+            const artifact = artifacts[i];
+            const item = artifact.item;
+
+            // Slot background
+            ctx.fillStyle = 'rgba(20, 40, 30, 0.8)';
+            ctx.fillRect(slotX, slotY, layout.slotSize, layout.slotSize);
+
+            // Slot outline (tier colors)
+            let outlineColor = 'rgba(255, 255, 255, 0.7)';
+            if (item.tier === 'common') outlineColor = '#9b9b9b';
+            else if (item.tier === 'uncommon') outlineColor = '#7dff8a';
+            else if (item.tier === 'rare') outlineColor = '#7dc7ff';
+            ctx.strokeStyle = outlineColor;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(slotX, slotY, layout.slotSize, layout.slotSize);
+
+            // Highlight selected artifact
+            if (museum.selectedArtifactIndex === artifact.slotIndex) {
+              ctx.strokeStyle = '#ffff00';
+              ctx.lineWidth = 2.5;
+              ctx.strokeRect(
+                slotX - 1,
+                slotY - 1,
+                layout.slotSize + 2,
+                layout.slotSize + 2
+              );
+            }
+
+            // Draw sprite
+            if (
+              item.sprite &&
+              item.sprite.complete &&
+              item.sprite.naturalWidth
+            ) {
+              const spriteSize = layout.slotSize - 6;
+              const spriteX = slotX + (layout.slotSize - spriteSize) / 2;
+              const spriteY = slotY + (layout.slotSize - spriteSize) / 2;
+              ctx.save();
+              ctx.imageSmoothingEnabled = false;
+              ctx.drawImage(
+                item.sprite,
+                spriteX,
+                spriteY,
+                spriteSize,
+                spriteSize
+              );
+              ctx.restore();
+            }
+
+            // Hover tooltip
+            const isHovered =
+              mouseX >= slotX &&
+              mouseX <= slotX + layout.slotSize &&
+              mouseY >= slotY &&
+              mouseY <= slotY + layout.slotSize;
+            if (isHovered && !hoveredItemDescription) {
+              const tierLabel = item.tier ? ` (${item.tier})` : '';
+              hoveredItemDescription = item.name + tierLabel;
+            }
+          }
+
+          if (hoveredItemDescription) {
+            const tooltipPadding = 8;
+            const tooltipX = mouseX + 10;
+            const tooltipY = mouseY + 10;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            const metrics = ctx.measureText(hoveredItemDescription);
+            const tooltipWidth = metrics.width + tooltipPadding * 2;
+            const tooltipHeight = 20;
+            const finalTooltipX =
+              tooltipX + tooltipWidth > canvas.width
+                ? mouseX - tooltipWidth - 10
+                : tooltipX;
+            const finalTooltipY =
+              tooltipY + tooltipHeight > canvas.height
+                ? mouseY - tooltipHeight - 10
+                : tooltipY;
+            ctx.fillRect(
+              finalTooltipX,
+              finalTooltipY,
+              tooltipWidth,
+              tooltipHeight
+            );
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(
+              hoveredItemDescription,
+              finalTooltipX + tooltipPadding,
+              finalTooltipY + 4
+            );
+          }
 
           ctx.restore();
         }
@@ -6663,6 +7159,20 @@
               camera.x = player.x;
               camera.y = player.y;
 
+              // Regenerate tiles (randomize X's) and ensure sprites are loaded
+              tileMap = generateTiles();
+              tileRegenerationScheduled = false; // Reset flag to allow regeneration
+              // Force immediate regeneration to ensure all sprite-based tiles are properly rendered
+              doRegenerateTiles(); // Call directly to ensure it happens synchronously
+
+              // Reset museum state
+              museum.doorPrompt = false;
+              museum.wasNearDoor = false;
+              museum.buildMode = false;
+
+              // Reset game over state
+              gameOver.active = false;
+
               gameState = 'playing';
               e.stopPropagation(); // Prevent other handlers from processing
             }
@@ -6683,15 +7193,22 @@
               // Update loading progress (pass dt in milliseconds)
               updateLoadingProgress(dt);
 
-              // Only proceed to museum when:
-              // 1. Progress bar has reached 100% (8 seconds have passed)
+              // Only proceed to overworld when:
+              // 1. Progress bar has reached 100% (7.5 seconds have passed)
               // 2. All assets are loaded (or at least we've waited long enough)
               if (
                 loadingState.displayProgress >= 0.99 &&
                 loadingState.allLoaded
               ) {
-                gameState = 'museum';
-                initializeMuseum();
+                // Ensure tiles are regenerated with sprites before starting
+                tileRegenerationScheduled = false;
+                doRegenerateTiles(); // Regenerate all tiles with loaded sprites
+                gameState = 'playing';
+                // Reset player position to overworld starting position
+                player.x = world.width / 2;
+                player.y = world.height - 40;
+                camera.x = player.x;
+                camera.y = player.y;
               }
             } else if (gameState === 'title') {
               // Update title screen camera for smooth circular scrolling
