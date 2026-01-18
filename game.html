@@ -121,7 +121,7 @@
           speed: 0.3, // radians per second (slow, smooth rotation)
         };
 
-        // Game state: 'title', 'playing', 'dayEnd', 'museum', or 'weekEnd'
+        // Game state: 'loading', 'title', 'controls', 'playing', 'dayEnd', 'museum', or 'weekEnd'
         let gameState = 'loading';
 
         // Loading screen facts - random facts shown while loading
@@ -302,14 +302,15 @@
           buildMode: false, // Whether build mode is active
           displayCases: [], // Array of display cases: {row, col, artifact: null or {name, sprite}}
           selectedArtifactIndex: null, // Index of selected artifact in inventory (for build mode)
+          cannonDisplay: null, // Special 1x2 display for cannon artifact only: {artifact: null or {name, sprite, tier}}
         };
 
         // Day/Time system
         const dayTime = {
-          currentDay: 1, // 0 = Monday, 1 = Tuesday, ..., 6 = Sunday (set to 1 for testing)
-          currentHour: 8, // Current hour (set to 8 for testing - start of day)
-          hourTimer: 0, // Timer that accumulates seconds, resets when >= 45
-          secondsPerHour: 45, // Each in-game hour = 45 seconds
+          currentDay: 0, // 0 = Monday, 1 = Tuesday, ..., 6 = Sunday
+          currentHour: 8, // Current hour (start at start of Monday = 8 AM)
+          hourTimer: 0, // Timer that accumulates seconds, resets when >= 30
+          secondsPerHour: 30, // Each in-game hour = 30 seconds (reduced from 45)
           dayEndHour: 18, // 6 PM (day ends when hour reaches this)
           warningHour: 17, // 5 PM (1 hour before end)
           days: [
@@ -454,6 +455,7 @@
           mineCount: 4, // 4 mines in a 6x6 grid
           gameOver: false,
           won: false,
+          gameOverMessage: null, // Message to display when game over (e.g., "Oops!")
           firstClick: true,
           clickCount: 0, // Track number of left clicks made (to prevent winning on first turn)
           tileRow: null,
@@ -697,9 +699,6 @@
         // vendingMachineSprite.imageSmoothingEnabled = false;
         // vendingMachineSprite.src = 'assets/sprites/Vending_Machine.png';
 
-        const chocolateBarSprite = new Image();
-        chocolateBarSprite.imageSmoothingEnabled = false;
-        chocolateBarSprite.src = 'assets/sprites/Chocolate_Bar.png';
 
         // Minigame reward sprites
         const bulletsSprite = new Image();
@@ -721,6 +720,22 @@
         const canteenSprite = new Image();
         canteenSprite.imageSmoothingEnabled = false;
         canteenSprite.src = 'assets/sprites/Canteen.png';
+
+        const cannonSprite = new Image();
+        cannonSprite.imageSmoothingEnabled = false;
+        cannonSprite.src = 'assets/sprites/Cannon.png';
+
+        const cannonShardsSprite = new Image();
+        cannonShardsSprite.imageSmoothingEnabled = false;
+        cannonShardsSprite.src = 'assets/sprites/Cannon_shards.png';
+
+        const buttonsSprite = new Image();
+        buttonsSprite.imageSmoothingEnabled = false;
+        buttonsSprite.src = 'assets/sprites/Buttons.png';
+
+        const quickShoesSprite = new Image();
+        quickShoesSprite.imageSmoothingEnabled = false;
+        quickShoesSprite.src = 'assets/sprites/Quick_shoes.png';
 
         // Museum sprites
         const displaySprite = new Image();
@@ -1118,10 +1133,11 @@
         const stamina = {
           current: 100,
           max: 100,
-          drainPerSecond: 35, // how fast stamina drains while sprinting
+          drainPerSecond: 35, // how fast stamina drains while sprinting (base value)
           regenPerSecond: 22, // how fast stamina regenerates when not sprinting
           minToSprint: 8, // must have at least this much to initiate sprint
           exhausted: false, // when true, cannot sprint until fully recovered
+          hasShoes: false, // Track if player has received shoes from cannonBuff (reduces drain by 50%)
         };
 
         // Cache gradients for stamina bar (created once, reused)
@@ -1188,6 +1204,7 @@
           dialogue: null, // Current dialogue text
           dialogueStage: 0, // Track dialogue progress (0-5)
           hasGivenRadar: false, // Track if player has received radar
+          selectingArtifact: false, // Track if player is selecting artifact to give
         };
 
         // Museum Curator NPC (positioned in museum)
@@ -1196,8 +1213,9 @@
           y: 0, // Will be set in initializeMuseum
           radius: 20,
           dialogue: null, // Current dialogue text
-          dialogueStage: 0, // 0 = none, 1 = has artifacts, 2 = no artifacts
+          dialogueStage: 0, // Dialogue stage (0-6 for has artifacts, 0-2 for no artifacts)
           dialogueTimer: 0, // Timer for auto-closing dialogue
+          hasCompletedIntro: false, // Track if player has completed initial dialogue sequence
         };
 
         // Cannon Buff NPC (positioned in museum, next to cannon display)
@@ -1209,24 +1227,16 @@
           dialogueStage: 0, // Dialogue stage (0-4 for intro, 0 for repeat)
           dialogueTimer: 0, // Timer for auto-closing dialogue
           hasCompletedIntro: false, // Track if player has seen initial dialogue
+          hasGivenReward: false, // Track if player has received shoes reward
         };
 
         // Inventory system
         const inventory = {
           open: false,
-          slots: Array(15).fill(null), // 15 inventory slots
+          slots: Array(25).fill(null), // 25 inventory slots (increased from 15)
           equipment: null, // 1 equipment slot
-          chocolateBarCount: 0, // Track chocolate bars (stored in equipment slot, not inventory)
           speedBrush: false, // Track if Speed Brush is owned (equipment slot only, not inventory)
-        };
-
-        // Candybar boost system
-        const candybarBoost = {
-          active: false, // Whether candybar boost is currently active
-          duration: 0, // Time remaining in seconds
-          maxDuration: 20, // 20 seconds duration
-          cooldown: 0, // Time remaining on cooldown in seconds
-          cooldownTime: 20, // 20 seconds cooldown
+          selectedSlotIndex: null, // Track which slot is selected for deletion
         };
 
         const keys = Object.create(null);
@@ -1359,6 +1369,50 @@
                     curator.dialogueTimer = 0;
                     player.vx = 0;
                     player.vy = 0;
+                    return;
+                  }
+
+                  // Check cannonBuff interaction - use fixed distance for reliability
+                  const cannonDx = player.x - cannonBuff.x;
+                  const cannonDy = player.y - cannonBuff.y;
+                  const cannonDistSq = cannonDx * cannonDx + cannonDy * cannonDy;
+
+                  if (cannonDistSq <= interactionDistSq) {
+                    // Check if cannon is placed in museum
+                    const hasCannon =
+                      museum.cannonDisplay &&
+                      museum.cannonDisplay.artifact &&
+                      museum.cannonDisplay.artifact.name === 'Cannon';
+
+                    // Start cannonBuff dialogue sequence
+                    if (hasCannon && !cannonBuff.hasGivenReward) {
+                      // First talk after placing cannon
+                      cannonBuff.dialogueStage = 0;
+                      cannonBuff.dialogue =
+                        "Wow! A cannon! I don't know how you did it, but here it is!";
+                    } else if (hasCannon && cannonBuff.hasGivenReward) {
+                      // After reward given
+                      cannonBuff.dialogue = "Good luck!";
+                      cannonBuff.dialogueStage = 0;
+                    } else if (!cannonBuff.hasCompletedIntro) {
+                      // Initial intro dialogue - activate quest
+                      cannonBuff.dialogueStage = 0;
+                      cannonBuff.dialogue =
+                        "Hello there! As you can tell, I'm a big fan of cannons.";
+                      // Activate quest when first talking
+                      if (!quests.getCannonForCannonBuff.active) {
+                        quests.getCannonForCannonBuff.active = true;
+                      }
+                    } else {
+                      // After intro, no cannon yet
+                      cannonBuff.dialogue =
+                        "Find and put a cannon in your museum, I'll make it worth your while!";
+                      cannonBuff.dialogueStage = 0;
+                    }
+                    cannonBuff.dialogueTimer = 0;
+                    player.vx = 0;
+                    player.vy = 0;
+                    return;
                   }
                 } else {
                   // Use normal handleInteraction for playing state
@@ -1391,6 +1445,42 @@
               museum.wasNearDoor = false;
               museum.buildMode = false;
               gameOver.active = false;
+              return;
+            }
+
+            // Controls screen: Space to continue to game (only on key press, not hold)
+            if (gameState === 'controls' && e.code === 'Space' && keyJustPressed['Space']) {
+              e.preventDefault();
+              // Initialize day/time system for new game
+              dayTime.currentDay = 0; // Start on Monday
+              dayTime.currentHour = 8; // Start at start of Monday (8 AM)
+              dayTime.hourTimer = 0;
+
+              // Reset player position
+              player.x = world.width / 2;
+              player.y = world.height - 40;
+              player.vx = 0;
+              player.vy = 0;
+
+              // Reset camera
+              camera.x = player.x;
+              camera.y = player.y;
+
+              // Regenerate tiles (randomize X's) and ensure sprites are loaded
+              tileMap = generateTiles();
+              tileRegenerationScheduled = false; // Reset flag to allow regeneration
+              // Force immediate regeneration to ensure all sprite-based tiles are properly rendered
+              doRegenerateTiles(); // Call directly to ensure it happens synchronously
+
+              // Reset museum state
+              museum.doorPrompt = false;
+              museum.wasNearDoor = false;
+              museum.buildMode = false;
+
+              // Reset game over state
+              gameOver.active = false;
+
+              gameState = 'playing';
               return;
             }
 
@@ -1581,6 +1671,30 @@
           if (gameState === 'museum' && museum.buildMode) {
             // First, check if player clicked the build mode inventory panel
             const buildLayout = getBuildModeInventoryLayout();
+            
+            // Check if clicking on red X delete button (bottom right of panel)
+            const deleteButtonSize = 32;
+            const deleteButtonX = buildLayout.panelX + buildLayout.panelWidth - deleteButtonSize - 8;
+            const deleteButtonY = buildLayout.panelY + buildLayout.panelHeight - deleteButtonSize - 8;
+            
+            if (
+              x >= deleteButtonX &&
+              x <= deleteButtonX + deleteButtonSize &&
+              y >= deleteButtonY &&
+              y <= deleteButtonY + deleteButtonSize
+            ) {
+              // Check if an artifact slot is selected
+              if (museum.selectedArtifactIndex !== null) {
+                const selectedItem = inventory.slots[museum.selectedArtifactIndex];
+                if (selectedItem && selectedItem.type === 'artifact') {
+                  // Delete the selected artifact
+                  inventory.slots[museum.selectedArtifactIndex] = null;
+                  museum.selectedArtifactIndex = null; // Clear selection
+                }
+              }
+              return;
+            }
+            
             if (
               x >= buildLayout.panelX &&
               x <= buildLayout.panelX + buildLayout.panelWidth &&
@@ -1646,46 +1760,97 @@
               const clickedCol = Math.floor(museumX / museumTileSize);
               const clickedRow = Math.floor(museumY / museumTileSize);
 
-              for (let i = 0; i < museum.displayCases.length; i++) {
-                const displayCase = museum.displayCases[i];
-                if (
-                  displayCase.row === clickedRow &&
-                  displayCase.col === clickedCol
-                ) {
-                  // Clicked on a display case
-                  if (displayCase.artifact) {
-                    // Try to remove artifact back into inventory
-                    const added = addItemToInventory(
-                      displayCase.artifact.name,
-                      displayCase.artifact.sprite
-                    );
-                    if (added) {
-                      displayCase.artifact = null;
-                      museum.selectedArtifactIndex = null;
-                    }
-                  } else {
-                    // Place the selected artifact if possible
-                    const selectedIndex = museum.selectedArtifactIndex;
-                    const selectedItem =
-                      selectedIndex !== null
-                        ? inventory.slots[selectedIndex]
-                        : null;
+              // Check if cannon display was clicked (special 1x2 display at row 6, cols 7-8)
+              const cannonRow = Math.floor(museum.height / 2) - 2; // Row 6
+              const leftCannonCol = Math.floor(museum.width / 2) - 1; // Col 7
+              const rightCannonCol = leftCannonCol + 1; // Col 8
 
-                    if (selectedItem && selectedItem.type === 'artifact') {
-                      // Place artifact in display case
-                      displayCase.artifact = {
-                        name: selectedItem.name,
-                        sprite: selectedItem.sprite,
-                        tier:
-                          selectedItem.tier ||
-                          getArtifactTier(selectedItem.name),
-                      };
-                      // Remove from inventory and clear selection
-                      inventory.slots[selectedIndex] = null;
-                      museum.selectedArtifactIndex = null;
-                    }
+              if (
+                clickedRow === cannonRow &&
+                (clickedCol === leftCannonCol || clickedCol === rightCannonCol)
+              ) {
+                // Clicked on cannon display
+                const selectedIndex = museum.selectedArtifactIndex;
+                const selectedItem =
+                  selectedIndex !== null
+                    ? inventory.slots[selectedIndex]
+                    : null;
+
+                if (museum.cannonDisplay && museum.cannonDisplay.artifact) {
+                  // Try to remove cannon artifact back into inventory
+                  const added = addItemToInventory(
+                    museum.cannonDisplay.artifact.name,
+                    museum.cannonDisplay.artifact.sprite
+                  );
+                  if (added) {
+                    museum.cannonDisplay.artifact = null;
+                    museum.selectedArtifactIndex = null;
                   }
-                  break;
+                } else if (
+                  selectedItem &&
+                  selectedItem.type === 'artifact' &&
+                  selectedItem.name === 'Cannon'
+                ) {
+                  // Place cannon in cannon display (only Cannon can go here)
+                  museum.cannonDisplay = {
+                    artifact: {
+                      name: selectedItem.name,
+                      sprite: selectedItem.sprite,
+                      tier:
+                        selectedItem.tier || getArtifactTier(selectedItem.name),
+                    },
+                  };
+                  // Remove from inventory and clear selection
+                  inventory.slots[selectedIndex] = null;
+                  museum.selectedArtifactIndex = null;
+                }
+              } else {
+                // Check regular display cases
+                for (let i = 0; i < museum.displayCases.length; i++) {
+                  const displayCase = museum.displayCases[i];
+                  if (
+                    displayCase.row === clickedRow &&
+                    displayCase.col === clickedCol
+                  ) {
+                    // Clicked on a regular display case
+                    if (displayCase.artifact) {
+                      // Try to remove artifact back into inventory
+                      const added = addItemToInventory(
+                        displayCase.artifact.name,
+                        displayCase.artifact.sprite
+                      );
+                      if (added) {
+                        displayCase.artifact = null;
+                        museum.selectedArtifactIndex = null;
+                      }
+                    } else {
+                      // Place the selected artifact if possible (but not Cannon)
+                      const selectedIndex = museum.selectedArtifactIndex;
+                      const selectedItem =
+                        selectedIndex !== null
+                          ? inventory.slots[selectedIndex]
+                          : null;
+
+                      if (
+                        selectedItem &&
+                        selectedItem.type === 'artifact' &&
+                        selectedItem.name !== 'Cannon'
+                      ) {
+                        // Place artifact in display case (Cannon cannot go in regular displays)
+                        displayCase.artifact = {
+                          name: selectedItem.name,
+                          sprite: selectedItem.sprite,
+                          tier:
+                            selectedItem.tier ||
+                            getArtifactTier(selectedItem.name),
+                        };
+                        // Remove from inventory and clear selection
+                        inventory.slots[selectedIndex] = null;
+                        museum.selectedArtifactIndex = null;
+                      }
+                    }
+                    break;
+                  }
                 }
               }
             }
@@ -1736,7 +1901,7 @@
             // Check for question mark click first (works even when game is over/won)
             const questionMarkX = 15;
             const questionMarkY = canvas.height - 15;
-            const questionMarkSize = 20;
+            const questionMarkSize = 28; // Increased from 20 to make question mark bigger
             if (
               x >= questionMarkX - 5 &&
               x <= questionMarkX + questionMarkSize + 5 &&
@@ -1805,7 +1970,7 @@
             // Check for question mark click first
             const questionMarkX = 15;
             const questionMarkY = canvas.height - 15;
-            const questionMarkSize = 20;
+            const questionMarkSize = 28; // Increased from 20 to make question mark bigger
             if (
               x >= questionMarkX - 5 &&
               x <= questionMarkX + questionMarkSize + 5 &&
@@ -1840,7 +2005,7 @@
             }
           }
 
-          // Inventory click handling (eating candybars from equipment slot, and inventory slots)
+          // Inventory click handling (selecting artifacts for Joseph, etc.)
           if (inventory.open) {
             // Equipment items array (must match drawInventory)
             const equipmentItems = [
@@ -1850,16 +2015,16 @@
                 description: "Reveals hidden X's",
               },
               {
-                name: 'Chocolate Bar',
-                sprite: chocolateBarSprite,
-                description: 'Speeds up your movement',
+                name: 'Quick shoes',
+                sprite: quickShoesSprite,
+                description: 'Decreases stamina drain when sprinting',
               },
             ];
 
             const slotSize = 48;
             const slotSpacing = 4;
             const slotsPerRow = 5;
-            const numRows = 2; // Match drawInventory
+            const numRows = 5; // Match drawInventory (increased from 2 to 5)
             const panelPadding = 24;
             const equipmentSlotSize = 48; // Match drawInventory
             const equipmentRowSpacing = 4; // Match drawInventory
@@ -1897,34 +2062,7 @@
               panelX + inventoryWidth / 2 - equipmentRowWidth / 2;
             const equipmentY = panelY + titleHeight + 30; // Match drawInventory
 
-            // Check if clicking on equipment slots (chocolate bar)
-            for (let i = 0; i < equipmentItems.length; i++) {
-              const item = equipmentItems[i];
-              if (item.name === 'Chocolate Bar') {
-                const equipmentX =
-                  equipmentRowStartX +
-                  i * (equipmentSlotSize + equipmentRowSpacing);
-
-                if (
-                  x >= equipmentX &&
-                  x <= equipmentX + equipmentSlotSize &&
-                  y >= equipmentY &&
-                  y <= equipmentY + equipmentSlotSize
-                ) {
-                  // Eat chocolate bar if not on cooldown and boost not active
-                  if (
-                    inventory.chocolateBarCount > 0 &&
-                    candybarBoost.cooldown <= 0 &&
-                    !candybarBoost.active
-                  ) {
-                    candybarBoost.active = true;
-                    candybarBoost.duration = candybarBoost.maxDuration;
-                    inventory.chocolateBarCount -= 1; // Decrease count
-                  }
-                  return;
-                }
-              }
-            }
+            // Equipment slots are display-only (Quick shoes are always active when owned)
 
             // Artifacts slots (for other items)
             const artifactsLabelY =
@@ -1934,6 +2072,29 @@
               equipmentSpacing;
             const slotsStartX = panelX + panelPadding;
             const slotsStartY = artifactsLabelY;
+
+            // Check if clicking on red X delete button
+            const deleteButtonSize = 40;
+            const deleteButtonX = panelX + inventoryWidth + 20;
+            const deleteButtonY = panelY + titleHeight;
+            
+            if (
+              x >= deleteButtonX &&
+              x <= deleteButtonX + deleteButtonSize &&
+              y >= deleteButtonY &&
+              y <= deleteButtonY + deleteButtonSize
+            ) {
+              // Check if an artifact slot is selected
+              if (inventory.selectedSlotIndex !== null) {
+                const selectedItem = inventory.slots[inventory.selectedSlotIndex];
+                if (selectedItem && selectedItem.type === 'artifact') {
+                  // Delete the selected artifact
+                  inventory.slots[inventory.selectedSlotIndex] = null;
+                  inventory.selectedSlotIndex = null; // Clear selection
+                }
+              }
+              return;
+            }
 
             // Check if clicking on inventory slots
             for (let row = 0; row < numRows; row++) {
@@ -1949,16 +2110,37 @@
                   y <= slotY + slotSize
                 ) {
                   const item = inventory.slots[slotIndex];
+                  
+                  // Check if selecting artifact for Joseph
                   if (
+                    joseph.selectingArtifact &&
                     item &&
-                    item.type === 'consumable' &&
-                    item.name === 'Candybar'
+                    item.type === 'artifact' &&
+                    item.name !== 'Cannon' &&
+                    (item.tier === 'rare' ||
+                      item.tier === 'super rare' ||
+                      item.tier === 'legendary')
                   ) {
-                    // Eat candybar if not on cooldown and boost not active
-                    if (candybarBoost.cooldown <= 0 && !candybarBoost.active) {
-                      candybarBoost.active = true;
-                      candybarBoost.duration = candybarBoost.maxDuration;
-                      inventory.slots[slotIndex] = null; // Remove from inventory
+                    // Give artifact to Joseph and receive radar
+                    inventory.slots[slotIndex] = null; // Remove from inventory
+                    // Give radar to player
+                    inventory.equipment = {
+                      name: 'Radar',
+                      sprite: radarSprite,
+                      tier: 0, // Not a shovel tier
+                    };
+                    radar.active = true;
+                    quests.findArtifactWithRadar.active = true;
+                    joseph.hasGivenRadar = true;
+                    joseph.selectingArtifact = false;
+                    joseph.dialogue = null;
+                    joseph.dialogueStage = 0;
+                  } else if (item && item.type === 'artifact') {
+                    // Select artifact for deletion (toggle selection)
+                    if (inventory.selectedSlotIndex === slotIndex) {
+                      inventory.selectedSlotIndex = null; // Deselect if already selected
+                    } else {
+                      inventory.selectedSlotIndex = slotIndex; // Select this slot
                     }
                   }
                   return;
@@ -1993,8 +2175,9 @@
           // Cannons are at row 6 (0-indexed), cols 7-8
           const cannonRow = Math.floor(museum.height / 2) - 2; // Row 6
           const rightCannonCol = Math.floor(museum.width / 2); // Col 8
-          cannonBuff.x = (rightCannonCol + 2) * museumTileSize; // 2 tiles to the right of right cannon
-          cannonBuff.y = cannonRow * museumTileSize; // Same row as cannons
+          // Center cannonBuff in the tile (add half tile size to center it)
+          cannonBuff.x = (rightCannonCol + 2) * museumTileSize + museumTileSize / 2; // 2 tiles to the right of right cannon, centered
+          cannonBuff.y = cannonRow * museumTileSize + museumTileSize / 2; // Same row as cannons, centered
 
           // Position camera to place museum at bottom middle of screen
           camera.x = museumWorldWidth / 2; // Center horizontally (160 for 320px wide museum)
@@ -2017,6 +2200,8 @@
           museum.doorPrompt = false;
           museum.wasNearDoor = false;
           museum.buildMode = false;
+          museum.cannonDisplay = null; // Reset cannon display
+          // Note: cannonBuff.hasGivenReward is NOT reset here - reward persists across days
 
           // Initialize display cases along the walls (top, left, right)
           // Keep them away from corners so the room feels less cramped
@@ -2043,6 +2228,7 @@
           addItemToInventory('Grapeshot', grapeshotSprite);
           addItemToInventory('Ornate pin', pinSprite);
           addItemToInventory('Canteen', canteenSprite);
+          addItemToInventory('Cannon', cannonSprite); // Add cannon for testing
         }
 
         // Function to start a new day
@@ -2096,26 +2282,18 @@
           tileMap = generateTiles();
           tileRegenerationScheduled = false; // Reset flag to allow regeneration
           regenerateTiles(); // Regenerate tiles to ensure sprites are properly loaded
+
+          // Day 0 (Monday) starts in museum, other days start in overworld
+          if (dayTime.currentDay === 0) {
+            gameState = 'museum';
+            initializeMuseum();
+          }
+          // Otherwise gameState is already 'playing' - start in overworld
         }
 
         function update(dtMs) {
           const dt = (dtMs || 16.67) / 1000; // seconds
 
-          // Update candybar boost timer
-          if (gameState === 'playing') {
-            if (candybarBoost.active) {
-              candybarBoost.duration -= dt;
-              if (candybarBoost.duration <= 0) {
-                candybarBoost.active = false;
-                candybarBoost.cooldown = candybarBoost.cooldownTime; // Start cooldown
-              }
-            } else if (candybarBoost.cooldown > 0) {
-              candybarBoost.cooldown -= dt;
-              if (candybarBoost.cooldown < 0) {
-                candybarBoost.cooldown = 0;
-              }
-            }
-          }
 
           // Update day/time system (only when playing)
           if (gameState === 'playing') {
@@ -2179,18 +2357,17 @@
               hasInput &&
               stamina.current > 0;
 
-            if (curator.dialogue || museum.buildMode) {
+            if (curator.dialogue || cannonBuff.dialogue || museum.buildMode) {
               // Stop player movement during dialogue or build mode
               player.vx = 0;
               player.vy = 0;
             } else {
-              const candybarMultiplier = candybarBoost.active ? 1.5 : 1.0;
               const accel = allowBoost
-                ? player.accel * player.sprintMultiplier * candybarMultiplier
-                : player.accel * candybarMultiplier;
+                ? player.accel * player.sprintMultiplier
+                : player.accel;
               const maxSpeed = allowBoost
-                ? player.maxSpeed * player.sprintMultiplier * candybarMultiplier
-                : player.maxSpeed * candybarMultiplier;
+                ? player.maxSpeed * player.sprintMultiplier
+                : player.maxSpeed;
 
               let ax = 0;
               let ay = 0;
@@ -2346,14 +2523,12 @@
               hasInput &&
               stamina.current > 0;
 
-            // Apply candybar boost (50% speed increase) if active
-            const candybarMultiplier = candybarBoost.active ? 1.5 : 1.0;
             const accel = allowBoost
-              ? player.accel * player.sprintMultiplier * candybarMultiplier
-              : player.accel * candybarMultiplier;
+              ? player.accel * player.sprintMultiplier
+              : player.accel;
             const maxSpeed = allowBoost
-              ? player.maxSpeed * player.sprintMultiplier * candybarMultiplier
-              : player.maxSpeed * candybarMultiplier;
+              ? player.maxSpeed * player.sprintMultiplier
+              : player.maxSpeed;
 
             // Input axes
             let ax = 0;
@@ -2399,7 +2574,11 @@
 
             // Stamina update
             if (shouldDrain) {
-              stamina.current -= stamina.drainPerSecond * dt;
+              // Shoes reduce stamina drain by 50%
+              const drainRate = stamina.hasShoes
+                ? stamina.drainPerSecond * 0.5
+                : stamina.drainPerSecond;
+              stamina.current -= drainRate * dt;
             } else {
               stamina.current += stamina.regenPerSecond * dt;
             }
@@ -2444,10 +2623,7 @@
           // Update crouch animation
           if (crouchAnimation.active) {
             const dt = dtMs / 1000; // Convert to seconds
-            // Apply candybar boost: 50% faster digging = 50% less duration
-            const effectiveDuration = candybarBoost.active
-              ? crouchAnimation.duration * 0.5
-              : crouchAnimation.duration;
+            const effectiveDuration = crouchAnimation.duration;
             crouchAnimation.timer += dt;
 
             // Create particles during animation (small dirt particles)
@@ -2797,22 +2973,37 @@
               "Since I don't have much use for this radar, you can have it - do me a favor.";
           } else if (joseph.dialogueStage === 5) {
             joseph.dialogue =
-              'Give me an artifact using this radar and you can keep it for good!';
-          } else if (joseph.dialogueStage >= 6) {
-            // Give radar to player and activate quest
-            if (!joseph.hasGivenRadar) {
-              // Add radar to inventory (equipment slot)
-              inventory.equipment = {
-                name: 'Radar',
-                sprite: radarSprite,
-                tier: 0, // Not a shovel tier
-              };
-              radar.active = true;
-              quests.findArtifactWithRadar.active = true;
-              joseph.hasGivenRadar = true;
+              "I'll swap it with a rare or rarer artifact!";
+          } else if (joseph.dialogueStage === 6) {
+            // Check if player has rare or higher artifacts (excluding cannon)
+            const rareArtifacts = inventory.slots.filter(
+              (slot, index) =>
+                slot &&
+                slot.type === 'artifact' &&
+                slot.name !== 'Cannon' &&
+                (slot.tier === 'rare' ||
+                  slot.tier === 'super rare' ||
+                  slot.tier === 'legendary')
+            );
+
+            if (rareArtifacts.length > 0) {
+              // Player has rare+ artifacts - ask them to select one
+              joseph.dialogue =
+                "I need a rare or higher artifact for my collection. Choose one from your inventory!";
+              joseph.selectingArtifact = true;
+              // Automatically open inventory so player can select an artifact
+              inventory.open = true;
+            } else {
+              // No rare+ artifacts
+              joseph.dialogue =
+                "But it looks like you don't have one. Come back when you get a rare or higher artifact!";
+              joseph.selectingArtifact = false;
             }
+          } else if (joseph.dialogueStage >= 7) {
+            // Close dialogue
             joseph.dialogue = null;
             joseph.dialogueStage = 0;
+            joseph.selectingArtifact = false;
           }
         }
 
@@ -2850,19 +3041,32 @@
           const hasArtifacts = inventory.slots.some((slot) => slot !== null);
 
           if (hasArtifacts) {
-            // Player has artifacts - three stages (0, 1, 2)
+            // Player has artifacts - dialogue sequence (stages 1-5)
             if (curator.dialogueStage === 1) {
               curator.dialogue =
-                'Press "E" to go into build mode, there you can create display cases for the things you\'ve dug up.';
-            } else if (curator.dialogueStage >= 2) {
+                'Did you know the first museum was the Ennigaldi-Nana\'s museum, most likley created in 530 B.C.?';
+            } else if (curator.dialogueStage === 2) {
+              curator.dialogue =
+                "It too, had artifacts lined up in its halls.";
+            } else if (curator.dialogueStage === 3) {
+              curator.dialogue =
+                'If you want to do the same, use "E" to enter build mode.';
+            } else if (curator.dialogueStage === 4) {
+              curator.dialogue =
+                "There, you can choose which artifacts to put in the displays!";
+            } else if (curator.dialogueStage === 5) {
+              curator.dialogue =
+                "I hear that you will be rewarded if you get the best artifacts by the end of the week...";
+              curator.hasCompletedIntro = true; // Mark intro as complete
+            } else if (curator.dialogueStage >= 6) {
               curator.dialogue = null;
               curator.dialogueStage = 0;
             }
           } else {
-            // Player has no artifacts - three stages (0, 1, 2)
+            // Player has no artifacts - two stages (1, 2)
             if (curator.dialogueStage === 1) {
               curator.dialogue =
-                "Dig up the X's with your shovel to get artifacts!";
+                "Dig up some artifacts, then we can talk.";
             } else if (curator.dialogueStage >= 2) {
               curator.dialogue = null;
               curator.dialogueStage = 0;
@@ -2870,9 +3074,79 @@
           }
         }
 
+        function advanceCannonBuffDialogue() {
+          // Cannon Buff dialogue advances through stages
+          cannonBuff.dialogueStage++;
+
+          // Check if cannon is placed in museum
+          const hasCannon =
+            museum.cannonDisplay &&
+            museum.cannonDisplay.artifact &&
+            museum.cannonDisplay.artifact.name === 'Cannon';
+
+          if (hasCannon && !cannonBuff.hasGivenReward) {
+            // Reward dialogue sequence (4 stages: 0, 1, 2, 3)
+            if (cannonBuff.dialogueStage === 1) {
+              cannonBuff.dialogue =
+                "As your reward, I will give you these new shoes.";
+            } else if (cannonBuff.dialogueStage === 2) {
+              cannonBuff.dialogue =
+                "I was going to hike Henry Knox's trail with these, but I think i'll just admire this cannon instead.";
+            } else if (cannonBuff.dialogueStage === 3) {
+              cannonBuff.dialogue =
+                "They make you lose less stamina while sprinting! Good luck filling out your museum!";
+            } else if (cannonBuff.dialogueStage >= 4) {
+              // Give Quick shoes reward and complete sequence
+              stamina.hasShoes = true;
+              cannonBuff.hasGivenReward = true;
+              cannonBuff.dialogue = null;
+              cannonBuff.dialogueStage = 0;
+              // Complete quest
+              if (quests.getCannonForCannonBuff) {
+                quests.getCannonForCannonBuff.completed = true;
+                quests.getCannonForCannonBuff.active = false;
+              }
+            }
+          } else if (hasCannon && cannonBuff.hasGivenReward) {
+            // After reward given, just say "Good luck!" and close
+            cannonBuff.dialogue = null;
+            cannonBuff.dialogueStage = 0;
+          } else if (!cannonBuff.hasCompletedIntro) {
+            // Initial dialogue sequence (4 stages: 0, 1, 2, 3)
+            if (cannonBuff.dialogueStage === 1) {
+              cannonBuff.dialogue =
+                "Did you know that in the winter of 1775-76, this colonel called Henry Knox hauled 60 tons of these over 300 miles?";
+            } else if (cannonBuff.dialogueStage === 2) {
+              cannonBuff.dialogue =
+                'Its true! It\'s called the "Henry Knox Noble Train of Artillety".';
+            } else if (cannonBuff.dialogueStage === 3) {
+              cannonBuff.dialogue =
+                "If you somehow get a cannon in your museum, I'll make it worth your while!";
+            } else if (cannonBuff.dialogueStage >= 4) {
+              // Completed the intro sequence
+              cannonBuff.dialogue = null;
+              cannonBuff.hasCompletedIntro = true;
+              cannonBuff.dialogueStage = 0;
+              // Activate quest when intro completes
+              if (!quests.getCannonForCannonBuff.active) {
+                quests.getCannonForCannonBuff.active = true;
+              }
+            }
+          } else {
+            // After intro is complete (no cannon yet), just close the message
+            cannonBuff.dialogue = null;
+            cannonBuff.dialogueStage = 0;
+          }
+        }
+
         function handleInteraction() {
           // Don't interact if inventory is open
           if (inventory.open) {
+            return;
+          }
+
+          // Don't interact if in build mode (museum build mode)
+          if (gameState === 'museum' && museum.buildMode) {
             return;
           }
 
@@ -2900,13 +3174,19 @@
                 (slot) => slot !== null
               );
 
-              if (hasArtifacts) {
+              if (curator.hasCompletedIntro) {
+                // After intro is complete, just say "Open build mode with E!"
+                curator.dialogue = 'Open build mode with E!';
+                curator.dialogueStage = 1; // Single stage for repeat dialogue
+              } else if (hasArtifacts) {
+                // First time with artifacts - start intro dialogue sequence
                 curator.dialogue =
-                  'Hello there! I see you have some artifacts.';
+                  'Did you know the first museum was the Ennigaldi-Nana\'s museum, most likley created in 530 B.C.?';
                 curator.dialogueStage = 1;
               } else {
+                // No artifacts - start "no artifacts" dialogue sequence
                 curator.dialogue =
-                  "Looks like you don't have anything to put in your museum.";
+                  "Looks like you don't have any artifacts.";
                 curator.dialogueStage = 1;
               }
               curator.dialogueTimer = 0; // Don't auto-close, wait for Spacebar press
@@ -2915,7 +3195,54 @@
               player.vy = 0;
               return;
             }
-            // If in museum state but not close to curator, return (no other NPCs in museum)
+
+            // Check if player is touching cannonBuff (collision-based, only in museum state)
+            // Use larger interaction distance (2.0x) to make it easier to interact, like joseph
+            const cannonDx = player.x - cannonBuff.x;
+            const cannonDy = player.y - cannonBuff.y;
+            const cannonDistSq = cannonDx * cannonDx + cannonDy * cannonDy;
+            const cannonMinDist = cannonBuff.radius + playerRadius;
+            const cannonMinDistSq = cannonMinDist * cannonMinDist;
+
+            // Allow interaction when very close (use 2.0x multiplier for easier interaction)
+            if (cannonDistSq <= cannonMinDistSq * 2.0) {
+              // Check if cannon is placed in museum
+              const hasCannon =
+                museum.cannonDisplay &&
+                museum.cannonDisplay.artifact &&
+                museum.cannonDisplay.artifact.name === 'Cannon';
+
+              // Start cannonBuff dialogue sequence
+              if (hasCannon && !cannonBuff.hasGivenReward) {
+                // First talk after placing cannon
+                cannonBuff.dialogueStage = 0;
+                cannonBuff.dialogue =
+                  "Wow! A cannon! I don't know how you did it, but here it is!";
+              } else if (hasCannon && cannonBuff.hasGivenReward) {
+                // After reward given
+                cannonBuff.dialogue = "Good luck!";
+                cannonBuff.dialogueStage = 0;
+              } else if (!cannonBuff.hasCompletedIntro) {
+                // Initial intro dialogue - activate quest
+                cannonBuff.dialogueStage = 0;
+                cannonBuff.dialogue =
+                  "Hello there! As you can tell, I'm a big fan of cannons.";
+                // Activate quest when first talking
+                if (!quests.getCannonForCannonBuff.active) {
+                  quests.getCannonForCannonBuff.active = true;
+                }
+              } else {
+                // After intro, no cannon yet
+                cannonBuff.dialogue =
+                  "Find and put a cannon in your museum, I'll make it worth your while!";
+                cannonBuff.dialogueStage = 0;
+              }
+              cannonBuff.dialogueTimer = 0; // Don't auto-close, wait for Spacebar press
+              // Kill momentum when opening dialogue
+              player.vx = 0;
+              player.vy = 0;
+              return;
+            }
             return;
           }
 
@@ -2992,15 +3319,39 @@
                 if (tile.name === 'redX' || tile.name === 'secretX') {
                   // Store which minigame to start after animation
                   // Randomly select one of four minigames with equal probability (25% each)
-                  const minigames = ['brushing', 'declaration', 'minesweeper', 'typo'];
+                  // Select one of four minigames (removed 'declaration' - it's now handled by 'typo')
+                  const minigames = ['brushing', 'minesweeper', 'typo'];
                   const randomIndex = Math.floor(Math.random() * minigames.length);
                   crouchAnimation.pendingMinigame = minigames[randomIndex];
                   // Store whether this is a secret X tile for later reward multiplier
                   crouchAnimation.isSecretX = tile.name === 'secretX';
+                  
+                  // Store tile position for conversion to grass
+                  crouchAnimation.tileRow = row;
+                  crouchAnimation.tileCol = col;
+                  
+                  // Convert X tile to grass immediately when interacted with
+                  const grassDef = tileDefinitions.find(
+                    (def) => def.name === 'grass'
+                  );
+                  if (grassDef) {
+                    tileMap[row][col] = {
+                      name: grassDef.name,
+                      canvas: createTileCanvas(grassDef.draw),
+                    };
+                    // Remove from discovered secret X list if it was a secret X tile
+                    if (tile.name === 'secretX') {
+                      radar.discoveredSecretX = radar.discoveredSecretX.filter(
+                        (pos) => !(pos.row === row && pos.col === col)
+                      );
+                    }
+                  }
                 } else {
                   // No minigame for other tiles
                   crouchAnimation.pendingMinigame = null;
                   crouchAnimation.isSecretX = false;
+                  crouchAnimation.tileRow = null;
+                  crouchAnimation.tileCol = null;
                 }
                 // Stop player movement during crouch animation
                 player.vx = 0;
@@ -3018,15 +3369,21 @@
           'Rusty Nails',
           'Bullets',
           'Grapeshot',
+          'Buttons',
           'Ornate pin',
           'Canteen',
+          'Cannon',
+          'Cannon Shards',
         ];
         const artifactTiers = {
           'Rusty Nails': 'common',
           Bullets: 'common',
           Grapeshot: 'uncommon',
+          Buttons: 'uncommon',
           'Ornate pin': 'rare',
           Canteen: 'rare',
+          'Cannon Shards': 'super rare',
+          Cannon: 'legendary',
         };
         const rarityRank = {
           common: 0,
@@ -3083,37 +3440,122 @@
         }
 
         // Function to give minigame reward (randomly chooses artifact)
+        // Distribution: 40% common, 32% uncommon, 15% rare, 8% super rare, 5% legendary
+        // For radar-discovered X's: 30% common (10% reduction), 35% uncommon, 17.5% rare, 10% super rare, 7.5% legendary
+        // Common: Rusty Nails (20%), Bullets (20%) = 40% total (30% for secret X)
+        // Uncommon: Grapeshot (16%), Buttons (16%) = 32% total (35% for secret X)
+        // Rare: Ornate pin (7.5%), Canteen (7.5%) = 15% total (17.5% for secret X)
+        // Super Rare: Cannon Shards (8%) = 8% total (10% for secret X)
+        // Legendary: Cannon (5%) = 5% total (7.5% for secret X)
         function giveMinigameReward() {
-          // Randomly choose artifact: Rusty Nails (35%), Bullets (20%), Grapeshot (20%), Ornate pin (15%), Canteen (10%)
-          const roll = Math.random();
-
-          if (roll < 0.35) {
-            // 35% chance - Rusty Nails
-            if (
-              rustyNailsSprite.complete &&
-              rustyNailsSprite.naturalWidth > 0
-            ) {
-              return addItemToInventory('Rusty Nails', rustyNailsSprite);
-            }
-          } else if (roll < 0.55) {
-            // 20% chance - Bullets
-            if (bulletsSprite.complete && bulletsSprite.naturalWidth > 0) {
-              return addItemToInventory('Bullets', bulletsSprite);
-            }
-          } else if (roll < 0.75) {
-            // 20% chance - Grapeshot
-            if (grapeshotSprite.complete && grapeshotSprite.naturalWidth > 0) {
-              return addItemToInventory('Grapeshot', grapeshotSprite);
-            }
-          } else if (roll < 0.9) {
-            // 15% chance - Ornate pin
-            if (pinSprite.complete && pinSprite.naturalWidth > 0) {
-              return addItemToInventory('Ornate pin', pinSprite);
+          // Check if this reward is from a radar-discovered secret X
+          const isSecretX = brushingMinigame.isSecretX || minesweeperMinigame.isSecretX || typoMinigame.isSecretX;
+          
+          let roll = Math.random();
+          
+          if (isSecretX) {
+            // Radar-discovered X: 10% lower common chance, spread evenly to other rarities
+            // Common: 30% (15% Rusty Nails, 15% Bullets)
+            // Uncommon: 35% (17.5% Grapeshot, 17.5% Buttons)
+            // Rare: 17.5% (8.75% Ornate pin, 8.75% Canteen)
+            // Super Rare: 10% (Cannon Shards)
+            // Legendary: 7.5% (Cannon)
+            
+            if (roll < 0.15) {
+              // 15% chance - Rusty Nails (common)
+              if (
+                rustyNailsSprite.complete &&
+                rustyNailsSprite.naturalWidth > 0
+              ) {
+                return addItemToInventory('Rusty Nails', rustyNailsSprite);
+              }
+            } else if (roll < 0.30) {
+              // 15% chance - Bullets (common)
+              if (bulletsSprite.complete && bulletsSprite.naturalWidth > 0) {
+                return addItemToInventory('Bullets', bulletsSprite);
+              }
+            } else if (roll < 0.475) {
+              // 17.5% chance - Grapeshot (uncommon)
+              if (grapeshotSprite.complete && grapeshotSprite.naturalWidth > 0) {
+                return addItemToInventory('Grapeshot', grapeshotSprite);
+              }
+            } else if (roll < 0.65) {
+              // 17.5% chance - Buttons (uncommon)
+              if (buttonsSprite.complete && buttonsSprite.naturalWidth > 0) {
+                return addItemToInventory('Buttons', buttonsSprite);
+              }
+            } else if (roll < 0.7375) {
+              // 8.75% chance - Ornate pin (rare)
+              if (pinSprite.complete && pinSprite.naturalWidth > 0) {
+                return addItemToInventory('Ornate pin', pinSprite);
+              }
+            } else if (roll < 0.825) {
+              // 8.75% chance - Canteen (rare)
+              if (canteenSprite.complete && canteenSprite.naturalWidth > 0) {
+                return addItemToInventory('Canteen', canteenSprite);
+              }
+            } else if (roll < 0.925) {
+              // 10% chance - Cannon Shards (super rare)
+              if (
+                cannonShardsSprite.complete &&
+                cannonShardsSprite.naturalWidth > 0
+              ) {
+                return addItemToInventory('Cannon Shards', cannonShardsSprite);
+              }
+            } else {
+              // 7.5% chance - Cannon (legendary)
+              if (cannonSprite.complete && cannonSprite.naturalWidth > 0) {
+                return addItemToInventory('Cannon', cannonSprite);
+              }
             }
           } else {
-            // 10% chance - Canteen
-            if (canteenSprite.complete && canteenSprite.naturalWidth > 0) {
-              return addItemToInventory('Canteen', canteenSprite);
+            // Normal X: standard distribution
+            if (roll < 0.20) {
+              // 20% chance - Rusty Nails (common)
+              if (
+                rustyNailsSprite.complete &&
+                rustyNailsSprite.naturalWidth > 0
+              ) {
+                return addItemToInventory('Rusty Nails', rustyNailsSprite);
+              }
+            } else if (roll < 0.40) {
+              // 20% chance - Bullets (common)
+              if (bulletsSprite.complete && bulletsSprite.naturalWidth > 0) {
+                return addItemToInventory('Bullets', bulletsSprite);
+              }
+            } else if (roll < 0.56) {
+              // 16% chance - Grapeshot (uncommon)
+              if (grapeshotSprite.complete && grapeshotSprite.naturalWidth > 0) {
+                return addItemToInventory('Grapeshot', grapeshotSprite);
+              }
+            } else if (roll < 0.72) {
+              // 16% chance - Buttons (uncommon)
+              if (buttonsSprite.complete && buttonsSprite.naturalWidth > 0) {
+                return addItemToInventory('Buttons', buttonsSprite);
+              }
+            } else if (roll < 0.795) {
+              // 7.5% chance - Ornate pin (rare)
+              if (pinSprite.complete && pinSprite.naturalWidth > 0) {
+                return addItemToInventory('Ornate pin', pinSprite);
+              }
+            } else if (roll < 0.87) {
+              // 7.5% chance - Canteen (rare)
+              if (canteenSprite.complete && canteenSprite.naturalWidth > 0) {
+                return addItemToInventory('Canteen', canteenSprite);
+              }
+            } else if (roll < 0.95) {
+              // 8% chance - Cannon Shards (super rare)
+              if (
+                cannonShardsSprite.complete &&
+                cannonShardsSprite.naturalWidth > 0
+              ) {
+                return addItemToInventory('Cannon Shards', cannonShardsSprite);
+              }
+            } else {
+              // 5% chance - Cannon (legendary)
+              if (cannonSprite.complete && cannonSprite.naturalWidth > 0) {
+                return addItemToInventory('Cannon', cannonSprite);
+              }
             }
           }
           return false; // Failed to add reward (inventory full or sprite not loaded)
@@ -3121,8 +3563,9 @@
 
         // Function to start the actual minigame after crouch animation completes
         function startPendingMinigame() {
-          const col = Math.floor(player.x / tileSize);
-          const row = Math.floor(player.y / tileSize);
+          // Use stored tile position from crouch animation (tile already converted to grass)
+          const row = crouchAnimation.tileRow;
+          const col = crouchAnimation.tileCol;
 
           if (crouchAnimation.pendingMinigame === 'brushing') {
             // Start Brushing minigame
@@ -3140,7 +3583,7 @@
               brushingMinigame.redTriggerTime = 2 + Math.random() * 2; // 2-4 seconds
               brushingMinigame.perfectReleaseWindow = 0.75; // 0.75 seconds (instead of 0.5)
             } else {
-              brushingMinigame.redTriggerTime = 3 + Math.random() * 5; // 3-8 seconds
+              brushingMinigame.redTriggerTime = 2 + Math.random() * 3; // 2-5 seconds (reduced from 3-8)
               brushingMinigame.perfectReleaseWindow = 0.5; // 0.5 seconds
             }
             brushingMinigame.timeSinceRed = 0;
@@ -3160,6 +3603,7 @@
             minesweeperMinigame.isSecretX = crouchAnimation.isSecretX;
             minesweeperMinigame.gameOver = false;
             minesweeperMinigame.won = false;
+            minesweeperMinigame.gameOverMessage = null;
             minesweeperMinigame.firstClick = true;
             minesweeperMinigame.clickCount = 0; // Reset click count for new game
 
@@ -3388,29 +3832,7 @@
               giveMinigameReward();
             }
 
-            // Convert tile to grass
-            const grassDef = tileDefinitions.find(
-              (def) => def.name === 'grass'
-            );
-            if (
-              grassDef &&
-              brushingMinigame.tileRow !== null &&
-              brushingMinigame.tileCol !== null
-            ) {
-              tileMap[brushingMinigame.tileRow][brushingMinigame.tileCol] = {
-                name: grassDef.name,
-                canvas: createTileCanvas(grassDef.draw),
-              };
-              // Remove from discovered secret X list if it was a secret X tile
-              radar.discoveredSecretX = radar.discoveredSecretX.filter(
-                (pos) =>
-                  !(
-                    pos.row === brushingMinigame.tileRow &&
-                    pos.col === brushingMinigame.tileCol
-                  )
-              );
-            }
-
+            // Tile already converted to grass when interacted with
             brushingMinigame.active = false;
           }
         }
@@ -3465,27 +3887,7 @@
             giveMinigameReward();
           }
 
-          // Convert tile to grass
-          const grassDef = tileDefinitions.find((def) => def.name === 'grass');
-          if (
-            grassDef &&
-            typoMinigame.tileRow !== null &&
-            typoMinigame.tileCol !== null
-          ) {
-            tileMap[typoMinigame.tileRow][typoMinigame.tileCol] = {
-              name: grassDef.name,
-              canvas: createTileCanvas(grassDef.draw),
-            };
-            // Remove from discovered secret X list if it was a secret X tile
-            radar.discoveredSecretX = radar.discoveredSecretX.filter(
-              (pos) =>
-                !(
-                  pos.row === typoMinigame.tileRow &&
-                  pos.col === typoMinigame.tileCol
-                )
-            );
-          }
-
+          // Tile already converted to grass when interacted with
           // Close minigame after a short delay to show result
           setTimeout(() => {
             typoMinigame.active = false;
@@ -3553,9 +3955,10 @@
 
           minesweeper.revealed[row][col] = true;
 
-          // If it's a mine, game over
+          // If it's a mine, game over - show "Oops!" message
           if (minesweeper.grid[row][col]) {
             minesweeper.gameOver = true;
+            minesweeper.gameOverMessage = 'Oops!';
             return;
           }
 
@@ -3660,36 +4063,13 @@
               if (minesweeperMinigame.won) {
                 // Give reward for winning
                 giveMinigameReward();
-
-                // Convert tile to grass
-                const grassDef = tileDefinitions.find(
-                  (def) => def.name === 'grass'
-                );
-                if (
-                  grassDef &&
-                  minesweeperMinigame.tileRow !== null &&
-                  minesweeperMinigame.tileCol !== null
-                ) {
-                  tileMap[minesweeperMinigame.tileRow][
-                    minesweeperMinigame.tileCol
-                  ] = {
-                    name: grassDef.name,
-                    canvas: createTileCanvas(grassDef.draw),
-                  };
-                  // Remove from discovered secret X list if it was a secret X tile
-                  radar.discoveredSecretX = radar.discoveredSecretX.filter(
-                    (pos) =>
-                      !(
-                        pos.row === minesweeperMinigame.tileRow &&
-                        pos.col === minesweeperMinigame.tileCol
-                      )
-                  );
-                }
+                // Tile already converted to grass when interacted with
               }
 
               minesweeperMinigame.active = false;
               minesweeperMinigame.gameOver = false;
               minesweeperMinigame.won = false;
+              minesweeperMinigame.gameOverMessage = null;
             }, 2000); // 2 second delay
           }
         }
@@ -3883,12 +4263,15 @@
           curatorSprite,
           cannonBuffSprite,
           // vendingMachineSprite, // Removed - NPC not in use
-          chocolateBarSprite,
+          quickShoesSprite,
+          buttonsSprite,
           bulletsSprite,
           grapeshotSprite,
           rustyNailsSprite,
           pinSprite,
           canteenSprite,
+          cannonShardsSprite,
+          cannonSprite,
           displaySprite,
           flagSprite,
           dirtTileSprite,
@@ -3926,6 +4309,10 @@
         // Quest system
         const quests = {
           findArtifactWithRadar: {
+            active: false, // Whether quest is active
+            completed: false, // Whether quest is completed
+          },
+          getCannonForCannonBuff: {
             active: false, // Whether quest is active
             completed: false, // Whether quest is completed
           },
@@ -4394,6 +4781,49 @@
               cannonSize
             );
             ctx.restore();
+
+            // Draw cannon artifact if placed in cannon display
+            if (
+              museum.cannonDisplay &&
+              museum.cannonDisplay.artifact &&
+              museum.cannonDisplay.artifact.sprite &&
+              museum.cannonDisplay.artifact.sprite.complete &&
+              museum.cannonDisplay.artifact.sprite.naturalWidth > 0
+            ) {
+              const cannonArtifactSprite = museum.cannonDisplay.artifact.sprite;
+              // Draw cannon artifact centered in the 1x2 cannon display (spans both tiles)
+              // Preserve aspect ratio - cannon is wider than tall
+              const cannonTileWidth = museumTileSize * 2; // 2 tiles wide for cannon display
+              const cannonTileHeight = museumTileSize * 1.5; // 1.5 tiles tall
+              const spriteAspectRatio =
+                cannonArtifactSprite.naturalWidth /
+                cannonArtifactSprite.naturalHeight;
+              
+              let artifactWidth = cannonTileWidth * 1.0; // Use 100% of width (bigger)
+              let artifactHeight = artifactWidth / spriteAspectRatio; // Maintain aspect ratio
+              
+              // If height is too tall, scale down based on height instead
+              if (artifactHeight > cannonTileHeight * 0.9) {
+                artifactHeight = cannonTileHeight * 0.9; // Use 90% of height (bigger)
+                artifactWidth = artifactHeight * spriteAspectRatio;
+              }
+              
+              const cannonArtifactX =
+                leftCannonCol * museumTileSize +
+                (cannonTileWidth - artifactWidth) / 2; // Center horizontally
+              const cannonArtifactY =
+                cannonRow * museumTileSize +
+                (museumTileSize - artifactHeight) / 2; // Center vertically
+              
+              ctx.imageSmoothingEnabled = false;
+              ctx.drawImage(
+                cannonArtifactSprite,
+                cannonArtifactX,
+                cannonArtifactY,
+                artifactWidth,
+                artifactHeight
+              );
+            }
           } else {
             // Fallback rectangles if the sprite isn't ready yet
             ctx.fillStyle = '#5a5a5a';
@@ -4444,10 +4874,10 @@
               if (sprite.complete && sprite.naturalWidth > 0) {
                 ctx.drawImage(
                   sprite,
-                  caseX + 8,
-                  caseY + 8,
-                  museumTileSize - 16,
-                  museumTileSize - 16
+                  caseX + 4,
+                  caseY + 4,
+                  museumTileSize - 8,
+                  museumTileSize - 8
                 );
               }
             }
@@ -4675,13 +5105,88 @@
 
             ctx.restore();
 
+            // Draw cannonBuff (use same offset as player in museum)
+            ctx.save();
+            // Use same offset calculation as player drawing
+            const cannonBuffMuseumTileSize = tileSize;
+            const cannonBuffMuseumWorldWidth =
+              museum.width * cannonBuffMuseumTileSize;
+            const cannonBuffMuseumWorldHeight =
+              museum.height * cannonBuffMuseumTileSize;
+            const cannonBuffMuseumOffsetX =
+              (canvas.width - cannonBuffMuseumWorldWidth) / 2;
+            const cannonBuffMuseumOffsetY =
+              canvas.height - cannonBuffMuseumWorldHeight;
+            ctx.translate(cannonBuffMuseumOffsetX, cannonBuffMuseumOffsetY);
+
+            // Draw cannonBuff sprite (same pattern as curator)
+            if (cannonBuffSprite.complete && cannonBuffSprite.naturalWidth > 0) {
+              const spriteWidth = 43; // Match player size
+              const spriteHeight = 43;
+
+              // CannonBuff shadow
+              ctx.fillStyle = 'rgba(0,0,0,0.25)';
+              ctx.beginPath();
+              ctx.ellipse(
+                cannonBuff.x,
+                cannonBuff.y + spriteHeight * 0.35,
+                spriteWidth * 0.5,
+                spriteHeight * 0.22,
+                0,
+                0,
+                Math.PI * 2
+              );
+              ctx.fill();
+
+              const px = Math.round(cannonBuff.x - spriteWidth / 2);
+              const py = Math.round(cannonBuff.y - spriteHeight / 2);
+              ctx.imageSmoothingEnabled = false;
+              ctx.drawImage(
+                cannonBuffSprite,
+                px,
+                py,
+                spriteWidth,
+                spriteHeight
+              );
+            } else {
+              // Fallback while loading (same pattern as curator)
+              ctx.fillStyle = 'rgba(0,0,0,0.25)';
+              ctx.beginPath();
+              ctx.ellipse(
+                cannonBuff.x,
+                cannonBuff.y + cannonBuff.radius * 0.4,
+                cannonBuff.radius * 0.6,
+                cannonBuff.radius * 0.2,
+                0,
+                0,
+                Math.PI * 2
+              );
+              ctx.fill();
+
+              ctx.fillStyle = '#8b6914'; // Brown color for cannonBuff placeholder
+              ctx.strokeStyle = '#654321';
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.arc(
+                cannonBuff.x,
+                cannonBuff.y,
+                cannonBuff.radius,
+                0,
+                Math.PI * 2
+              );
+              ctx.fill();
+              ctx.stroke();
+            }
+
+            ctx.restore();
+
             // Draw door prompt if active
             if (museum.doorPrompt) {
               drawMuseumDoorPrompt();
             }
 
-            // Draw dialogue box if curator (or any NPC) has dialogue
-            if (curator.dialogue) {
+            // Draw dialogue box if curator or cannonBuff (or any NPC) has dialogue
+            if (curator.dialogue || cannonBuff.dialogue) {
               drawDialogueBox();
             }
 
@@ -4866,6 +5371,40 @@
             ctx.restore();
           }
 
+          // Check for cannon buff quest
+          if (
+            quests &&
+            quests.getCannonForCannonBuff &&
+            quests.getCannonForCannonBuff.active &&
+            !quests.getCannonForCannonBuff.completed
+          ) {
+            ctx.save();
+            ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = '#ffffff';
+
+            const questX = 16.5;
+            const questY = 14.5 + questUIHeight;
+
+            // Draw "Quests" label if this is the first quest
+            if (questUIHeight === 0) {
+              ctx.fillText('Quests', questX, questY);
+            }
+
+            // Draw quest description below
+            ctx.font = '12px ui-monospace, Menlo, Consolas, monospace';
+            ctx.fillStyle = '#e8eaf6';
+            ctx.fillText(
+              'Get a cannon for the Cannon Buff',
+              questX,
+              questY + (questUIHeight === 0 ? 18 : 0)
+            );
+
+            questUIHeight += questUIHeight === 0 ? 36 : 18; // Add height for this quest
+            ctx.restore();
+          }
+
           // UI: Stamina bar (top-left, below quest if visible, otherwise at top)
           const staminaBarY = 14.5 + questUIHeight;
           const bar = {
@@ -4887,11 +5426,10 @@
           if (!staminaBarGradients) initStaminaGradients();
           const ratio = stamina.current / stamina.max;
           const fillWidth = Math.round(bar.w * ratio);
-          // Make stamina bar red when candybar boost is active
-          ctx.fillStyle =
-            candybarBoost.active || stamina.exhausted
-              ? staminaBarGradients.exhausted
-              : staminaBarGradients.normal;
+          // Make stamina bar red when exhausted
+          ctx.fillStyle = stamina.exhausted
+            ? staminaBarGradients.exhausted
+            : staminaBarGradients.normal;
           ctx.beginPath();
           ctx.rect(bar.x + 1, bar.y + 1, Math.max(0, fillWidth - 2), bar.h - 2);
           ctx.fill();
@@ -5082,7 +5620,7 @@
 
             // Question mark in bottom left of screen - clickable to show instructions
             // Check if mouse is hovering over the question mark
-            const questionMarkSize = 20; // Approximate size of the question mark
+            const questionMarkSize = 28; // Increased from 20 to make question mark bigger
             const questionMarkX = 15;
             const questionMarkY = canvas.height - 15;
             const isHoveringQuestionMark =
@@ -5093,7 +5631,7 @@
 
             // Change color when hovering (like a button)
             ctx.fillStyle = isHoveringQuestionMark ? '#ffffff' : '#888888';
-            ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
+            ctx.font = 'bold 28px ui-monospace, Menlo, Consolas, monospace'; // Increased from 20px to make question mark bigger
             ctx.textAlign = 'left';
             ctx.textBaseline = 'bottom';
             ctx.fillText('?', questionMarkX, questionMarkY);
@@ -5409,7 +5947,7 @@
 
             // Question mark in bottom left of screen (for future use)
             // Check if mouse is hovering over the question mark
-            const questionMarkSize = 20; // Approximate size of the question mark
+            const questionMarkSize = 28; // Increased from 20 to make question mark bigger
             const questionMarkX = 15;
             const questionMarkY = canvas.height - 15;
             const isHoveringQuestionMark =
@@ -5420,7 +5958,7 @@
 
             // Change color when hovering (like a button)
             ctx.fillStyle = isHoveringQuestionMark ? '#ffffff' : '#888888';
-            ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
+            ctx.font = 'bold 28px ui-monospace, Menlo, Consolas, monospace'; // Increased from 20px to make question mark bigger
             ctx.textAlign = 'left';
             ctx.textBaseline = 'bottom';
             ctx.fillText('?', questionMarkX, questionMarkY);
@@ -5652,10 +6190,23 @@
                 panelY + 30
               );
             }
+            
+            // Display "Oops!" in red when game over (hit a bomb)
+            if (minesweeperMinigame.gameOver && minesweeperMinigame.gameOverMessage) {
+              ctx.fillStyle = '#ff0000'; // Red color
+              ctx.font = 'bold 24px ui-monospace, Menlo, Consolas, monospace';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(
+                minesweeperMinigame.gameOverMessage,
+                canvas.width / 2,
+                panelY + 30
+              );
+            }
 
             // Question mark in bottom left of screen - clickable to show instructions
             // Check if mouse is hovering over the question mark
-            const questionMarkSize = 20; // Approximate size of the question mark
+            const questionMarkSize = 28; // Increased from 20 to make question mark bigger
             const questionMarkX = 15;
             const questionMarkY = canvas.height - 15;
             const isHoveringQuestionMark =
@@ -5666,7 +6217,7 @@
 
             // Change color when hovering (like a button)
             ctx.fillStyle = isHoveringQuestionMark ? '#ffffff' : '#888888';
-            ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
+            ctx.font = 'bold 28px ui-monospace, Menlo, Consolas, monospace'; // Increased from 20px to make question mark bigger
             ctx.textAlign = 'left';
             ctx.textBaseline = 'bottom';
             ctx.fillText('?', questionMarkX, questionMarkY);
@@ -5833,277 +6384,11 @@
         function drawShopMenu() {
           // Shop system removed - function stub
           return;
-          const itemPadding = 10;
-          const titleHeight = 40;
-          const tabHeight = 30;
-          const instructionsHeight = 25;
-          const topPadding = 15;
-          const bottomPadding = 15;
-          const shopHeight =
-            titleHeight +
-            tabHeight +
-            topPadding +
-            shop.items.length * itemHeight +
-            (shop.items.length - 1) * itemPadding +
-            bottomPadding +
-            instructionsHeight;
-          const shopX = Math.round(canvas.width / 2 - shopWidth / 2) + 0.5;
-          const shopY = Math.round(canvas.height / 2 - shopHeight / 2) + 0.5;
-
-          // Background overlay
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-          // Shop panel background
-          ctx.fillStyle = 'rgba(8, 16, 12, 0.95)';
-          ctx.beginPath();
-          ctx.rect(shopX, shopY, shopWidth, shopHeight);
-          ctx.fill();
-
-          // Shop panel border
-          ctx.strokeStyle = '#ffffff'; // White borders
-          ctx.lineWidth = 3;
-          ctx.strokeRect(shopX, shopY, shopWidth, shopHeight);
-
-          // Title
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 20px ui-monospace, Menlo, Consolas, monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'top';
-          ctx.fillText('Shop', shopX + shopWidth / 2, shopY + 12);
-
-          // Tabs
-          const tabWidth = shopWidth / shop.tabs.length;
-          for (let i = 0; i < shop.tabs.length; i++) {
-            const tabX = shopX + i * tabWidth;
-            const tabY = shopY + titleHeight;
-            const isActive = shop.currentTab === i;
-
-            // Tab background
-            ctx.fillStyle = isActive
-              ? 'rgba(20, 40, 30, 0.9)'
-              : 'rgba(15, 30, 20, 0.6)';
-            ctx.fillRect(tabX, tabY, tabWidth, tabHeight);
-
-            // Tab border
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(tabX, tabY, tabWidth, tabHeight);
-
-            // Tab text
-            ctx.fillStyle = '#ffffff';
-            ctx.font = isActive
-              ? 'bold 14px ui-monospace, Menlo, Consolas, monospace'
-              : '14px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(
-              shop.tabs[i].name,
-              tabX + tabWidth / 2,
-              tabY + tabHeight / 2
-            );
-          }
-
-          // Draw shop items
-          const startY = shopY + titleHeight + tabHeight + topPadding;
-          for (let i = 0; i < shop.items.length; i++) {
-            const item = shop.items[i];
-            const itemY = startY + i * (itemHeight + itemPadding);
-            const itemRectX = shopX + 20;
-            const itemRectY = itemY;
-            const itemRectW = shopWidth - 40;
-            const itemRectH = itemHeight;
-
-            // Check if item is purchased
-            let isPurchased = item.purchased === true;
-            // Also check for equipment items
-            if (item.type === 'equipment' && item.name === 'Radar') {
-              isPurchased = radar.active;
-            } else if (
-              item.type === 'equipment' &&
-              item.name === 'Speed Brush'
-            ) {
-              isPurchased = isPurchased || inventory.speedBrush;
-            } else if (
-              item.type === 'shovel' &&
-              item.tier === 6 &&
-              (item.name === 'Artifact spade' ||
-                item.name === 'Artifact shovel' ||
-                item.name === 'Artifact scoop')
-            ) {
-              // Artifact equipment is purchased if player has any artifact equipment
-              isPurchased = inventory.artifactEquipment !== null;
-            }
-
-            // Item background - red if purchased
-            ctx.fillStyle = isPurchased
-              ? 'rgba(80, 20, 20, 0.8)'
-              : 'rgba(20, 40, 30, 0.8)';
-            ctx.strokeStyle = isPurchased
-              ? 'rgba(200, 50, 50, 0.8)'
-              : 'rgba(255, 255, 255, 0.6)'; // Red borders if purchased
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.rect(itemRectX, itemRectY, itemRectW, itemRectH);
-            ctx.fill();
-            ctx.stroke();
-
-            // Draw item sprite (if available)
-            let itemSprite = null;
-            if (item.type === 'shovel') {
-              if (item.tier === 6) {
-                // Artifact equipment - use artifact shovel sprite
-                itemSprite = artifactShovelSprite;
-              } else {
-                itemSprite = shovelSprites[item.tier];
-              }
-            } else if (item.type === 'equipment' && item.name === 'Radar') {
-              itemSprite = radarSprite;
-            } else if (
-              item.type === 'equipment' &&
-              item.name === 'Speed Brush'
-            ) {
-              itemSprite = speedBrushSprite;
-            }
-
-            // Draw sprite if available (left side of item box)
-            const spriteSize = 32;
-            const spriteX = itemRectX + 10;
-            const spriteY = itemRectY + (itemRectH - spriteSize) / 2;
-            const hasSprite =
-              itemSprite && itemSprite.complete && itemSprite.naturalWidth > 0;
-            if (hasSprite) {
-              ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(
-                itemSprite,
-                spriteX,
-                spriteY,
-                spriteSize,
-                spriteSize
-              );
-            }
-
-            // Item name - gray out if purchased (offset to make room for sprite)
-            const nameX = itemRectX + (hasSprite ? 50 : 10);
-            ctx.fillStyle = isPurchased ? '#888888' : '#ffffff';
-            ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            ctx.fillText(item.name, nameX, itemRectY + 6);
-
-            // Item tier (only for shovels, skip tier 6 artifact items)
-            if (item.type === 'shovel' && item.tier !== 6) {
-              ctx.fillStyle = isPurchased ? '#888888' : '#ffffff';
-              ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-              ctx.fillText(`Tier ${item.tier}`, nameX, itemRectY + 22);
-            } else if (
-              item.type === 'shovel' &&
-              item.tier === 6 &&
-              item.description
-            ) {
-              // Show description for artifact items
-              ctx.fillStyle = isPurchased ? '#888888' : '#aaaaaa';
-              ctx.font = '10px ui-monospace, Menlo, Consolas, monospace';
-              ctx.fillText(item.description, nameX, itemRectY + 22);
-            }
-
-            if (isPurchased) {
-              // Show "Sold" or "You already have one" for purchased items in red
-              ctx.fillStyle = '#ff6666';
-              ctx.font = 'bold 16px ui-monospace, Menlo, Consolas, monospace';
-              ctx.textAlign = 'right';
-              ctx.textBaseline = 'middle';
-              // For artifact equipment, show "You already have one" instead of "Sold"
-              const soldText =
-                item.type === 'shovel' &&
-                item.tier === 6 &&
-                (item.name === 'Artifact spade' ||
-                  item.name === 'Artifact shovel' ||
-                  item.name === 'Artifact scoop')
-                  ? 'You already have one'
-                  : 'Sold';
-              ctx.fillText(
-                soldText,
-                itemRectX + itemRectW - 10,
-                itemRectY + itemRectH / 2
-              );
-            } else {
-              // Check if previous tier is purchased (for Multipliers tab)
-              let canBuy = true;
-              if (item.type === 'shovel' && item.tier > 1) {
-                // Find previous tier item
-                const prevTierItem = shop.items.find(
-                  (i) => i.type === 'shovel' && i.tier === item.tier - 1
-                );
-                if (prevTierItem && !prevTierItem.purchased) {
-                  canBuy = false;
-                }
-              }
-
-              // Price
-              const priceText = `$${item.price}`;
-              const canAfford = money.amount >= item.price;
-              ctx.fillStyle = '#ffffff';
-              ctx.font = 'bold 14px ui-monospace, Menlo, Consolas, monospace';
-              ctx.textAlign = 'right';
-              ctx.fillText(
-                priceText,
-                itemRectX + itemRectW - 10,
-                itemRectY + 14
-              );
-
-              // Buy button indicator (click to buy)
-              if (!canBuy) {
-                ctx.fillStyle = '#ff6666';
-                ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-                ctx.textAlign = 'right';
-                ctx.fillText(
-                  'Buy previous tier first',
-                  itemRectX + itemRectW - 10,
-                  itemRectY + 32
-                );
-              } else if (canAfford) {
-                ctx.fillStyle = '#ffffff';
-                ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-                ctx.textAlign = 'right';
-                ctx.fillText(
-                  'Click to buy',
-                  itemRectX + itemRectW - 10,
-                  itemRectY + 32
-                );
-              } else {
-                ctx.fillStyle = '#ff6666'; // Red for cannot afford
-                ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-                ctx.textAlign = 'right';
-                ctx.fillText(
-                  'Cannot afford',
-                  itemRectX + itemRectW - 10,
-                  itemRectY + 32
-                );
-              }
-            }
-          }
-
-          // Instructions
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText(
-            'Press Spacebar to close | Click tabs and items to interact',
-            shopX + shopWidth / 2,
-            shopY + shopHeight - 10
-          );
-
-          ctx.restore();
         }
 
         function purchaseItem(itemIndex) {
           // Shop system removed - function stub
           return;
-          if (itemIndex < 0 || itemIndex >= shop.items.length) return;
-
-          const item = shop.items[itemIndex];
 
           // Check for artifact equipment FIRST (before general shovel handling)
           // Artifact items have type: 'shovel' and tier: 6, so they would match the general shovel condition
@@ -6299,6 +6584,8 @@
             characterName = 'Joseph';
           } else if (curator.dialogue) {
             characterName = 'Museum Curator';
+          } else if (cannonBuff.dialogue) {
+            characterName = 'Cannon Buff';
           }
 
           // Draw character name above dialogue text
@@ -6373,9 +6660,9 @@
               description: "Reveals hidden X's",
             },
             {
-              name: 'Chocolate Bar',
-              sprite: chocolateBarSprite,
-              description: 'Speeds up your movement',
+              name: 'Quick shoes',
+              sprite: quickShoesSprite,
+              description: 'Decreases stamina drain when sprinting',
             },
           ];
 
@@ -6383,7 +6670,7 @@
           const slotSize = 48;
           const slotSpacing = 4;
           const slotsPerRow = 5;
-          const numRows = 2; // Reduced from 3 to make room for equipment row
+          const numRows = 5; // Increased from 2 to 5 rows to show 25 slots (5x5 grid)
           const panelPadding = 24;
           const equipmentSlotSize = 48;
           const equipmentRowSpacing = 4;
@@ -6465,13 +6752,11 @@
 
             // Check if player owns this item
             let isOwned = false;
-            let itemCount = 0; // For items with counts (like chocolate bars)
             if (item.name === 'Radar') {
               isOwned = radar.active;
-            } else if (item.name === 'Chocolate Bar') {
-              // Chocolate bars are stored in equipment slot with count
-              isOwned = inventory.chocolateBarCount > 0;
-              itemCount = inventory.chocolateBarCount;
+            } else if (item.name === 'Quick shoes') {
+              // Quick shoes are owned when given by cannon buff
+              isOwned = stamina.hasShoes;
             }
 
             // Check if hovering (only show description if owned)
@@ -6526,24 +6811,9 @@
                   spriteSize
                 );
                 ctx.restore();
-
-                // Draw count number in corner (for chocolate bars)
-                if (item.name === 'Chocolate Bar' && itemCount > 0) {
-                  ctx.fillStyle = '#ffffff';
-                  ctx.font =
-                    'bold 14px ui-monospace, Menlo, Consolas, monospace';
-                  ctx.textAlign = 'right';
                   ctx.textBaseline = 'bottom';
                   // Draw with shadow for readability
                   ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-                  ctx.shadowBlur = 2;
-                  ctx.fillText(
-                    itemCount.toString(),
-                    equipmentX + equipmentSlotSize - 4,
-                    equipmentY + equipmentSlotSize - 4
-                  );
-                  ctx.shadowBlur = 0; // Reset shadow
-                }
               }
             }
           }
@@ -6597,32 +6867,67 @@
                   item.sprite.complete &&
                   item.sprite.naturalWidth > 0
                 ) {
-                  const spriteSize = slotSize - 8; // Leave padding
-                  const spriteX = slotX + (slotSize - spriteSize) / 2;
-                  const spriteY = slotY + (slotSize - spriteSize) / 2;
                   ctx.save();
                   ctx.imageSmoothingEnabled = false;
-                  ctx.drawImage(
-                    item.sprite,
-                    spriteX,
-                    spriteY,
-                    spriteSize,
-                    spriteSize
-                  );
+                  
+                  // Special handling for Cannon - make it bigger and preserve aspect ratio
+                  if (item.name === 'Cannon') {
+                    const spriteAspectRatio =
+                      item.sprite.naturalWidth / item.sprite.naturalHeight;
+                    const maxSize = slotSize - 4; // Use more of the slot
+                    
+                    let spriteWidth = maxSize;
+                    let spriteHeight = spriteWidth / spriteAspectRatio;
+                    
+                    // If height is too tall, scale down based on height instead
+                    if (spriteHeight > maxSize) {
+                      spriteHeight = maxSize;
+                      spriteWidth = spriteHeight * spriteAspectRatio;
+                    }
+                    
+                    const spriteX = slotX + (slotSize - spriteWidth) / 2;
+                    const spriteY = slotY + (slotSize - spriteHeight) / 2;
+                    ctx.drawImage(
+                      item.sprite,
+                      spriteX,
+                      spriteY,
+                      spriteWidth,
+                      spriteHeight
+                    );
+                  } else {
+                    // Normal items use square size
+                    const spriteSize = slotSize - 8; // Leave padding
+                    const spriteX = slotX + (slotSize - spriteSize) / 2;
+                    const spriteY = slotY + (slotSize - spriteSize) / 2;
+                    ctx.drawImage(
+                      item.sprite,
+                      spriteX,
+                      spriteY,
+                      spriteSize,
+                      spriteSize
+                    );
+                  }
                   ctx.restore();
                 }
 
                 // Show description on hover
                 if (isHovered) {
                   let description = '';
-                  if (item.name === 'Candybar') {
-                    description = 'Speeds up your movement';
-                  } else if (item.name === 'Speed Brush') {
+                  if (item.name === 'Speed Brush') {
                     description = 'Makes brushing minigame easier';
                   } else {
                     // Add tier label for artifacts (ex: "Rusty Nails (common)")
                     const tierLabel = item.tier ? ` (${item.tier})` : '';
                     description = item.name + tierLabel;
+                    
+                    // Store tier color for artifacts
+                    if (item.type === 'artifact' && item.tier) {
+                      if (item.tier === 'common') hoveredItemTierColor = '#9b9b9b'; // Gray
+                      else if (item.tier === 'uncommon') hoveredItemTierColor = '#7dff8a'; // Light green
+                      else if (item.tier === 'rare') hoveredItemTierColor = '#7dc7ff'; // Light blue
+                      else if (item.tier === 'super rare') hoveredItemTierColor = '#00008b'; // Dark blue
+                      else if (item.tier === 'legendary') hoveredItemTierColor = '#ffd700'; // Gold
+                    }
                   }
                   if (!hoveredItemDescription) {
                     hoveredItemDescription = description;
@@ -6637,8 +6942,48 @@
                 else if (item.tier === 'uncommon')
                   outlineColor = '#7dff8a'; // Light green
                 else if (item.tier === 'rare') outlineColor = '#7dc7ff'; // Light blue
+                else if (item.tier === 'super rare')
+                  outlineColor = '#00008b'; // Dark blue for super rare
+                else if (item.tier === 'legendary')
+                  outlineColor = '#ffd700'; // Gold for legendary
               }
+              
+              // Highlight selected artifact for deletion
+              if (inventory.selectedSlotIndex === slotIndex && item && item.type === 'artifact') {
+                // Draw red highlight border for selected artifact
+                ctx.strokeStyle = '#ff0000'; // Red
+                ctx.lineWidth = 3;
+                ctx.strokeRect(
+                  slotX - 2,
+                  slotY - 2,
+                  slotSize + 4,
+                  slotSize + 4
+                );
+              }
+              
+              // Highlight eligible artifacts when selecting for Joseph
+              if (
+                joseph.selectingArtifact &&
+                item &&
+                item.type === 'artifact' &&
+                item.name !== 'Cannon' &&
+                (item.tier === 'rare' ||
+                  item.tier === 'super rare' ||
+                  item.tier === 'legendary')
+              ) {
+                // Draw yellow highlight border for eligible artifacts
+                ctx.strokeStyle = '#ffff00'; // Yellow
+                ctx.lineWidth = 3;
+                ctx.strokeRect(
+                  slotX - 2,
+                  slotY - 2,
+                  slotSize + 4,
+                  slotSize + 4
+                );
+              }
+              
               ctx.strokeStyle = outlineColor;
+              ctx.lineWidth = 1.5;
               ctx.stroke();
             }
           }
@@ -6673,7 +7018,9 @@
               tooltipWidth,
               tooltipHeight
             );
-            ctx.strokeStyle = '#ffffff';
+            // Use tier color for border and text if artifact has tier, otherwise white
+            const tooltipColor = hoveredItemTierColor || '#ffffff';
+            ctx.strokeStyle = tooltipColor;
             ctx.lineWidth = 1;
             ctx.strokeRect(
               finalTooltipX,
@@ -6682,13 +7029,40 @@
               tooltipHeight
             );
 
-            ctx.fillStyle = '#ffffff';
+            ctx.fillStyle = tooltipColor;
             ctx.fillText(
               hoveredItemDescription,
               finalTooltipX + tooltipPadding,
               finalTooltipY + 4
             );
           }
+
+          // Red X button for deleting artifacts (to the right of inventory panel)
+          const deleteButtonSize = 40;
+          const deleteButtonX = panelX + inventoryWidth + 20; // 20px spacing from inventory
+          const deleteButtonY = panelY + titleHeight; // Align with top of artifact slots
+          
+          // Check if hovering over delete button
+          const isHoveringDelete =
+            mouseX >= deleteButtonX &&
+            mouseX <= deleteButtonX + deleteButtonSize &&
+            mouseY >= deleteButtonY &&
+            mouseY <= deleteButtonY + deleteButtonSize;
+          
+          // Draw delete button background
+          ctx.fillStyle = isHoveringDelete ? 'rgba(255, 0, 0, 0.8)' : 'rgba(200, 0, 0, 0.6)';
+          ctx.fillRect(deleteButtonX, deleteButtonY, deleteButtonSize, deleteButtonSize);
+          
+          // Draw red X
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          const xPadding = 8;
+          ctx.moveTo(deleteButtonX + xPadding, deleteButtonY + xPadding);
+          ctx.lineTo(deleteButtonX + deleteButtonSize - xPadding, deleteButtonY + deleteButtonSize - xPadding);
+          ctx.moveTo(deleteButtonX + deleteButtonSize - xPadding, deleteButtonY + xPadding);
+          ctx.lineTo(deleteButtonX + xPadding, deleteButtonY + deleteButtonSize - xPadding);
+          ctx.stroke();
 
           // Instructions
           ctx.fillStyle = '#ffffff';
@@ -6787,55 +7161,69 @@
           const museumArtifacts = museum.displayCases
             .filter((displayCase) => displayCase.artifact)
             .map((displayCase) => displayCase.artifact);
-          const isFull = filledCases === totalCases;
-
+          
+          // Check if cannon is placed
+          const hasCannon = museum.cannonDisplay && museum.cannonDisplay.artifact && museum.cannonDisplay.artifact.name === 'Cannon';
+          
+          // Check if player has radar
+          const hasRadar = radar.active;
+          
+          // Count total artifacts in museum (including cannon)
+          const totalArtifacts = museumArtifacts.length + (hasCannon ? 1 : 0);
+          
+          // Check if player has nothing (no artifacts, no items)
+          if (totalArtifacts === 0 && !hasRadar) {
+            return {
+              name: 'Nothing',
+              reason: 'You did nothing, no artifacts, no items.',
+            };
+          }
+          
+          // Get all artifact names in museum (excluding cannon, which is separate)
           const museumNames = new Set(
             museumArtifacts.map((artifact) => artifact.name)
           );
-          const hasAllItems = ARTIFACT_NAMES.every((name) =>
+          
+          // Check if has all artifacts except cannon
+          const artifactsWithoutCannon = ARTIFACT_NAMES.filter(name => name !== 'Cannon');
+          const hasAllArtifactsMinusCannon = artifactsWithoutCannon.every((name) =>
             museumNames.has(name)
           );
-
-          const allAboveCommon =
-            museumArtifacts.length > 0 &&
-            museumArtifacts.every((artifact) => {
-              const tier = artifact.tier || getArtifactTier(artifact.name);
-              return isTierAbove(tier, 'common');
-            });
-          const allAboveSuperRare =
-            museumArtifacts.length > 0 &&
-            museumArtifacts.every((artifact) => {
-              const tier = artifact.tier || getArtifactTier(artifact.name);
-              return isTierAbove(tier, 'super rare');
-            });
-
-          if (hasAllItems) {
-            return {
-              name: 'Collecter',
-              reason: 'You displayed at least one of every artifact.',
-            };
-          }
-          if (!isFull) {
-            return {
-              name: 'Average',
-              reason: 'You did not completely fill your museum.',
-            };
-          }
-          if (allAboveSuperRare) {
+          
+          // Check if has all artifacts including cannon
+          const hasAllArtifactsWithCannon = hasAllArtifactsMinusCannon && hasCannon;
+          
+          // Check if museum is full
+          const isFull = filledCases === totalCases && hasCannon;
+          
+          // Legendary: Every artifact + cannon + radar
+          if (hasAllArtifactsWithCannon && hasRadar) {
             return {
               name: 'Legendary',
-              reason: 'Every displayed artifact is above super rare.',
+              reason: 'Every artifact + cannon + radar.',
             };
           }
-          if (allAboveCommon) {
+          
+          // Above average: Every artifact + cannon
+          if (hasAllArtifactsWithCannon) {
             return {
               name: 'Above Average',
-              reason: 'Every displayed artifact is above common.',
+              reason: 'Every artifact + Cannon.',
             };
           }
+          
+          // Average: One of every artifact, minus cannon
+          if (hasAllArtifactsMinusCannon) {
+            return {
+              name: 'Average',
+              reason: 'One of every artifact, minus cannon.',
+            };
+          }
+          
+          // Below average: Any amount of artifacts below the max
           return {
-            name: 'Average',
-            reason: 'Some displayed artifacts are common.',
+            name: 'Below Average',
+            reason: 'Any amount of artifacts below the max.',
           };
         }
 
@@ -6896,6 +7284,7 @@
           }
 
           let hoveredItemDescription = null;
+          let hoveredItemTierColor = null; // Store tier color for hovered artifacts
 
           // Draw artifact slots
           for (let i = 0; i < artifacts.length; i++) {
@@ -6917,6 +7306,8 @@
             if (item.tier === 'common') outlineColor = '#9b9b9b';
             else if (item.tier === 'uncommon') outlineColor = '#7dff8a';
             else if (item.tier === 'rare') outlineColor = '#7dc7ff';
+            else if (item.tier === 'super rare') outlineColor = '#00008b'; // Dark blue for super rare
+            else if (item.tier === 'legendary') outlineColor = '#ffd700'; // Gold for legendary
             ctx.strokeStyle = outlineColor;
             ctx.lineWidth = 1.5;
             ctx.strokeRect(slotX, slotY, layout.slotSize, layout.slotSize);
@@ -6939,18 +7330,46 @@
               item.sprite.complete &&
               item.sprite.naturalWidth
             ) {
-              const spriteSize = layout.slotSize - 6;
-              const spriteX = slotX + (layout.slotSize - spriteSize) / 2;
-              const spriteY = slotY + (layout.slotSize - spriteSize) / 2;
               ctx.save();
               ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(
-                item.sprite,
-                spriteX,
-                spriteY,
-                spriteSize,
-                spriteSize
-              );
+              
+              // Special handling for Cannon - make it bigger and preserve aspect ratio
+              if (item.name === 'Cannon') {
+                const spriteAspectRatio =
+                  item.sprite.naturalWidth / item.sprite.naturalHeight;
+                const maxSize = layout.slotSize - 2; // Use more of the slot
+                
+                let spriteWidth = maxSize;
+                let spriteHeight = spriteWidth / spriteAspectRatio;
+                
+                // If height is too tall, scale down based on height instead
+                if (spriteHeight > maxSize) {
+                  spriteHeight = maxSize;
+                  spriteWidth = spriteHeight * spriteAspectRatio;
+                }
+                
+                const spriteX = slotX + (layout.slotSize - spriteWidth) / 2;
+                const spriteY = slotY + (layout.slotSize - spriteHeight) / 2;
+                ctx.drawImage(
+                  item.sprite,
+                  spriteX,
+                  spriteY,
+                  spriteWidth,
+                  spriteHeight
+                );
+              } else {
+                // Normal items use square size
+                const spriteSize = layout.slotSize - 6;
+                const spriteX = slotX + (layout.slotSize - spriteSize) / 2;
+                const spriteY = slotY + (layout.slotSize - spriteSize) / 2;
+                ctx.drawImage(
+                  item.sprite,
+                  spriteX,
+                  spriteY,
+                  spriteSize,
+                  spriteSize
+                );
+              }
               ctx.restore();
             }
 
@@ -6963,6 +7382,15 @@
             if (isHovered && !hoveredItemDescription) {
               const tierLabel = item.tier ? ` (${item.tier})` : '';
               hoveredItemDescription = item.name + tierLabel;
+              
+              // Store tier color for artifacts
+              if (item.tier) {
+                if (item.tier === 'common') hoveredItemTierColor = '#9b9b9b'; // Gray
+                else if (item.tier === 'uncommon') hoveredItemTierColor = '#7dff8a'; // Light green
+                else if (item.tier === 'rare') hoveredItemTierColor = '#7dc7ff'; // Light blue
+                else if (item.tier === 'super rare') hoveredItemTierColor = '#00008b'; // Dark blue
+                else if (item.tier === 'legendary') hoveredItemTierColor = '#ffd700'; // Gold
+              }
             }
           }
 
@@ -6991,13 +7419,50 @@
               tooltipWidth,
               tooltipHeight
             );
-            ctx.fillStyle = '#ffffff';
+            // Use tier color for border and text if artifact has tier, otherwise white
+            const tooltipColor = hoveredItemTierColor || '#ffffff';
+            ctx.strokeStyle = tooltipColor;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(
+              finalTooltipX,
+              finalTooltipY,
+              tooltipWidth,
+              tooltipHeight
+            );
+            ctx.fillStyle = tooltipColor;
             ctx.fillText(
               hoveredItemDescription,
               finalTooltipX + tooltipPadding,
               finalTooltipY + 4
             );
           }
+
+          // Red X button for deleting artifacts (bottom right of panel)
+          const deleteButtonSize = 32;
+          const deleteButtonX = layout.panelX + layout.panelWidth - deleteButtonSize - 8; // 8px from right edge
+          const deleteButtonY = layout.panelY + layout.panelHeight - deleteButtonSize - 8; // 8px from bottom edge
+          
+          // Check if hovering over delete button
+          const isHoveringDelete =
+            mouseX >= deleteButtonX &&
+            mouseX <= deleteButtonX + deleteButtonSize &&
+            mouseY >= deleteButtonY &&
+            mouseY <= deleteButtonY + deleteButtonSize;
+          
+          // Draw delete button background
+          ctx.fillStyle = isHoveringDelete ? 'rgba(255, 0, 0, 0.8)' : 'rgba(200, 0, 0, 0.6)';
+          ctx.fillRect(deleteButtonX, deleteButtonY, deleteButtonSize, deleteButtonSize);
+          
+          // Draw red X
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          const xPadding = 6;
+          ctx.moveTo(deleteButtonX + xPadding, deleteButtonY + xPadding);
+          ctx.lineTo(deleteButtonX + deleteButtonSize - xPadding, deleteButtonY + deleteButtonSize - xPadding);
+          ctx.moveTo(deleteButtonX + deleteButtonSize - xPadding, deleteButtonY + xPadding);
+          ctx.lineTo(deleteButtonX + xPadding, deleteButtonY + deleteButtonSize - xPadding);
+          ctx.stroke();
 
           ctx.restore();
         }
@@ -7122,6 +7587,61 @@
           );
         }
 
+        // Controls screen rendering
+        function drawControlsScreen() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Fill canvas with world background color
+          ctx.fillStyle = world.bg;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Draw semi-transparent overlay
+          ctx.fillStyle = 'rgba(15, 26, 18, 0.9)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Title text
+          ctx.fillStyle = '#e8eaf6';
+          ctx.font = 'bold 36px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(
+            'Controls',
+            canvas.width / 2,
+            canvas.height / 2 - 120
+          );
+
+          // Controls text
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '20px ui-monospace, Menlo, Consolas, monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          const controlsText = [
+            'WASD or Arrow keys to move',
+            'Space to interact',
+            'E to open inventory'
+          ];
+
+          let textY = canvas.height / 2 - 40;
+          for (let i = 0; i < controlsText.length; i++) {
+            ctx.fillText(
+              controlsText[i],
+              canvas.width / 2,
+              textY
+            );
+            textY += 35; // Spacing between lines
+          }
+
+          // Continue instruction
+          ctx.fillStyle = '#e8eaf6';
+          ctx.font = 'bold 18px ui-monospace, Menlo, Consolas, monospace';
+          ctx.fillText(
+            'Press SPACE to continue',
+            canvas.width / 2,
+            canvas.height / 2 + 100
+          );
+        }
+
         // Handle mouse clicks for title screen
         canvas.addEventListener('click', (e) => {
           if (gameState === 'title') {
@@ -7144,36 +7664,8 @@
               y >= buttonY - buttonHeight / 2 &&
               y <= buttonY + buttonHeight / 2
             ) {
-              // Initialize day/time system for new game
-              dayTime.currentDay = 0; // Start on Monday
-              dayTime.currentHour = 8; // Start at 8:00 AM
-              dayTime.hourTimer = 0;
-
-              // Reset player position
-              player.x = world.width / 2;
-              player.y = world.height - 40;
-              player.vx = 0;
-              player.vy = 0;
-
-              // Reset camera
-              camera.x = player.x;
-              camera.y = player.y;
-
-              // Regenerate tiles (randomize X's) and ensure sprites are loaded
-              tileMap = generateTiles();
-              tileRegenerationScheduled = false; // Reset flag to allow regeneration
-              // Force immediate regeneration to ensure all sprite-based tiles are properly rendered
-              doRegenerateTiles(); // Call directly to ensure it happens synchronously
-
-              // Reset museum state
-              museum.doorPrompt = false;
-              museum.wasNearDoor = false;
-              museum.buildMode = false;
-
-              // Reset game over state
-              gameOver.active = false;
-
-              gameState = 'playing';
+              // Go to controls screen first
+              gameState = 'controls';
               e.stopPropagation(); // Prevent other handlers from processing
             }
           }
@@ -7193,7 +7685,7 @@
               // Update loading progress (pass dt in milliseconds)
               updateLoadingProgress(dt);
 
-              // Only proceed to overworld when:
+              // Only proceed to title screen when:
               // 1. Progress bar has reached 100% (7.5 seconds have passed)
               // 2. All assets are loaded (or at least we've waited long enough)
               if (
@@ -7203,12 +7695,7 @@
                 // Ensure tiles are regenerated with sprites before starting
                 tileRegenerationScheduled = false;
                 doRegenerateTiles(); // Regenerate all tiles with loaded sprites
-                gameState = 'playing';
-                // Reset player position to overworld starting position
-                player.x = world.width / 2;
-                player.y = world.height - 40;
-                camera.x = player.x;
-                camera.y = player.y;
+                gameState = 'title'; // Transition to title screen instead of directly to playing
               }
             } else if (gameState === 'title') {
               // Update title screen camera for smooth circular scrolling
@@ -7218,6 +7705,9 @@
                 titleScreenCamera.angle -= Math.PI * 2;
               }
               drawTitleScreen();
+            } else if (gameState === 'controls') {
+              // Draw controls screen
+              drawControlsScreen();
             } else {
               update(dt);
               render();
