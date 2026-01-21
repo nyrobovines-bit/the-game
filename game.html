@@ -331,6 +331,20 @@
         const tileCell = 4;
         const cellsPerTile = tileSize / tileCell;
 
+        // NPC spawn points (used for both NPC placement and X spawn safety)
+        const npcSpawnPoints = {
+          oldGuy: {
+            x: world.width / 2 + 150, // To the right of spawn
+            y: world.height - 40, // Same Y as spawn
+            radius: 20,
+          },
+          joseph: {
+            x: world.width / 2, // Central location
+            y: world.height / 2, // Central location
+            radius: 20,
+          },
+        };
+
         function randomRange(min, max) {
           return Math.random() * (max - min) + min;
         }
@@ -1057,11 +1071,10 @@
         function isNpcAtTile(row, col) {
           const tileCenterX = (col + 0.5) * tileSize;
           const tileCenterY = (row + 0.5) * tileSize;
-          const npcs = [oldGuy, joseph];
+          const npcKeys = Object.keys(npcSpawnPoints);
 
-          for (let i = 0; i < npcs.length; i++) {
-            const npc = npcs[i];
-            if (!npc) continue;
+          for (let i = 0; i < npcKeys.length; i++) {
+            const npc = npcSpawnPoints[npcKeys[i]];
             const dx = npc.x - tileCenterX;
             const dy = npc.y - tileCenterY;
             const npcRadius = npc.radius || tileSize * 0.5;
@@ -1190,9 +1203,9 @@
 
         // Old Guy NPC (positioned to the right of spawn)
         const oldGuy = {
-          x: world.width / 2 + 150, // To the right of spawn
-          y: world.height - 40, // Same Y as spawn
-          radius: 20,
+          x: npcSpawnPoints.oldGuy.x,
+          y: npcSpawnPoints.oldGuy.y,
+          radius: npcSpawnPoints.oldGuy.radius,
           dialogue: null, // Current dialogue text
           dialogueStage: 0, // Track which dialogue to show (0-5 for initial sequence)
           hasCompletedIntro: false, // Track if player has completed initial dialogue sequence
@@ -1200,9 +1213,9 @@
 
         // Joseph NPC (shopkeeper with radar, positioned centrally)
         const joseph = {
-          x: world.width / 2, // Central location
-          y: world.height / 2, // Central location
-          radius: 20,
+          x: npcSpawnPoints.joseph.x,
+          y: npcSpawnPoints.joseph.y,
+          radius: npcSpawnPoints.joseph.radius,
           dialogue: null, // Current dialogue text
           dialogueStage: 0, // Track dialogue progress (0-5)
           hasGivenRadar: false, // Track if player has received radar
